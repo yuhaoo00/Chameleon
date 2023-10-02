@@ -1,6 +1,7 @@
 import os
 import json
-
+import requests
+from io import BytesIO
 from PIL import Image
 from typing import Any
 from typing import Dict
@@ -44,12 +45,11 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, num_steps: int) -> bool:
-            return self.send_progress(step / num_steps)
+        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+            return self.send_progress((step+1) / data.extraData["num_steps"])
         
-        print(data.extraData)
-        pipe = get_model(data.extraData["version"])
-        return await txt2img(pipe, data, callback)
+        pipe = get_sd_t2i(data.extraData["version"])
+        return txt2img(pipe, data, callback)
 
 
 class Img2Img(IFieldsPlugin):
@@ -73,12 +73,67 @@ class Img2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, num_steps: int) -> bool:
-            return self.send_progress(step / num_steps)
+        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+            return self.send_progress((step+1) / data.extraData["num_steps"])
+        
+        img_url = data.nodeData.src
+        response = requests.get(img_url)
+        img = Image.open(BytesIO(response.content)).convert("RGB")
 
-        print(data.extraData)
-        pipe = get_model(data.extraData["version"])
-        return await img2img(pipe, data, callback)
+        pipe = get_sd_i2i(data.extraData["version"])
+        return img2img(pipe, img, data, callback)
+
+
+class SR(IFieldsPlugin):
+    image_should_audit = False
+
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=320,
+            h=300,
+            src=constants.SR_ICON,
+            tooltip=I18N(
+                zh="图片变高清",
+                en="Super Resolution",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="图片变高清",
+                    en="Super Resolution",
+                ),
+                definitions=sr_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        return
+
+
+class SOD(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=constants.SOD_ICON,
+            tooltip=I18N(
+                zh="抠图",
+                en="Image Matting",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="抠图",
+                    en="Image Matting",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        
+        return
+
 
 # groups
 class StaticPlugins(IPluginGroup):

@@ -280,16 +280,12 @@ sr_h_field.default = 2048
 sr_h_field.min = 1024
 sr_h_field.max = 3072
 sr_fields = OrderedDict(
-    is_anime=IBooleanField(
-        default=False,
+    model=ISelectField(
+        default="sd2-x4-upscaler",
+        options=["sd2-x4-upscaler", "ESRGAN", "SwinIR"],
         label=I18N(
-            zh="动漫模型",
-            en="Use Anime Model",
-        ),
-        tooltip=I18N(
-            zh="是否使用在动漫图片上微调过的超分辨率模型",
-            en="Whether should we use the super resolution model which is finetuned on anime images.",
-        ),
+            zh="模型", 
+            en="Model")
     ),
     target_w=sr_w_field,
     target_h=sr_h_field,
