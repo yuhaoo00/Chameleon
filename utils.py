@@ -1,5 +1,6 @@
 from cfdraw import *
 import torch
+import numpy as np
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
 
 sd_repos = {
@@ -7,6 +8,40 @@ sd_repos = {
     "base_sd_2.1": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-2-1",
     "base_sdxl_1.0": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-xl-base-1.0",
 }
+
+def transform_mask(mask, resize=None):
+    if resize is not None:
+        mask = mask.resize(resize)
+    # PIL Image to numpy array
+    mask = np.array(mask)
+    mask[mask>0] = 1
+    #mask = -mask+1
+    return mask[None,:,:]#.astype(bool)
+
+def mask_to_box(mask):
+    mask = np.array(mask)
+    h, w = mask.shape
+    mask_x = np.sum(mask, axis=0)
+    mask_y = np.sum(mask, axis=1)
+    x0, x1 = 0, w-1
+    y0, y1 = 0, h-1
+    while x0 < w:
+        if mask_x[x0] != 0:
+            break
+        x0 += 1
+    while x1 > -1:
+        if mask_x[x1] == 0:
+            break
+        x1 -= 1
+    while y0 < h:
+        if mask_y[y0] != 0:
+            break
+        y0 += 1
+    while y1 > -1:
+        if mask_y[y1] == 0:
+            break
+        y1 -= 1
+    return np.array([x0, y0, x1, y1])
 
 @cache_resource
 def get_sd_t2i(tag):
@@ -22,9 +57,9 @@ def get_sd_i2i(tag):
 
 @cache_resource
 def get_mSAM():
-    from extensions.MobileSAM.mobile_sam import sam_model_registry, SamAutomaticMaskGenerator, SamPredictor
+    from extensions.MobileSAM import sam_model_registry, SamPredictor
     model_type = "vit_t"
-    sam_checkpoint = "./weights/mobile_sam.pt"
+    sam_checkpoint = "/mnt/Data/CodeML/SD/CKPTS/mobile_sam.pt"
     mobile_sam = sam_model_registry[model_type](checkpoint=sam_checkpoint).cuda()
     mobile_sam.eval()
     predictor = SamPredictor(mobile_sam)

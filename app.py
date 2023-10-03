@@ -1,6 +1,7 @@
 import os
 import json
 import requests
+import numpy as np
 from io import BytesIO
 from PIL import Image
 from typing import Any
@@ -110,7 +111,7 @@ class SR(IFieldsPlugin):
         return
 
 
-class SOD(IFieldsPlugin):
+class Matting(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
@@ -131,8 +132,26 @@ class SOD(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+
+        url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
+        mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
+        img_url = url_node.src
+        mask_url = mask_node.src
+        img = Image.open(BytesIO(requests.get(img_url).content)).convert("RGB")
+        mask = Image.open(BytesIO(requests.get(mask_url).content)).convert("L")
+        box = mask_to_box(mask)
         
-        return
+        model = get_mSAM()
+        model.set_image(np.array(img))
+        mask_fined = model.predict(box=box,
+                                    #mask_input=mask[None,:,:],
+                                    #point_coords=np.array([[463, 455]]),
+                                    #point_labels=np.array([1]),
+                                    multimask_output=False)[0][0,:]
+        
+        img_masked = np.concatenate((np.array(img), (mask_fined[:,:,None]*255).astype(np.uint8)), axis=2)
+        img_masked = Image.fromarray(img_masked)
+        return img_masked
 
 
 # groups
@@ -191,8 +210,40 @@ class ImageFollowers(IPluginGroup):
             ),
         )
 
+class ImageAndMaskFollowers(IPluginGroup):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_group_styles,
+            offsetX=-48,
+            expandOffsetX=64,
+            tooltip=I18N(
+                zh="一组利用当前图片+蒙版来进行生成的插件",
+                en="A set of plugins which uses an image and a mask to generate images",
+            ),
+            nodeConstraintRules=NodeConstraintRules(
+                exactly=[NodeConstraints.IMAGE, NodeConstraints.PATH]
+            ),
+            pivot=PivotType.RT,
+            follow=True,
+            pluginInfo=IPluginGroupInfo(
+                name=I18N(
+                    zh="蒙版工具箱",
+                    en="Image & Mask Toolbox",
+                ),
+                header=I18N(
+                    zh="蒙版工具箱",
+                    en="Image & Mask Toolbox",
+                ),
+                plugins={
+                    "matting": Matting,
+                },
+            ),
+        )
+
 # uncomment this line to pre-load the models
 # get_apis()
 register_plugin("static")(StaticPlugins)
 register_plugin("image_followers")(ImageFollowers)
+register_plugin("image_and_mask_followers")(ImageAndMaskFollowers)
 app = App()
