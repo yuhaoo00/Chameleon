@@ -1,6 +1,8 @@
 from cfdraw import *
 import torch
 import numpy as np
+import torch.nn as nn
+import torch.nn.functional as F
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
 
 sd_repos = {
@@ -96,3 +98,18 @@ def img2img(pipe, img, data, step_callback):
                   generator=generator,
                   callback=step_callback).images[0]
     return image
+
+
+class ExpandEdge(nn.Module):
+    def __init__(self, strength=1):
+        super(ExpandEdge, self).__init__()
+        self.kernel_size = 3+2*strength
+        kernel = torch.ones((1,1,self.kernel_size,self.kernel_size), dtype=torch.float)
+        self.weight = nn.Parameter(data=kernel, requires_grad=False)
+ 
+    def forward(self, mask):
+        # mask [1,1,h,w]
+        x = F.conv2d(mask, self.weight, padding=self.kernel_size//2)
+        mask_new = torch.zeros_like(x)
+        mask_new[x>0 and x<(self.kernel_size**2)] = 1
+        return mask_new
