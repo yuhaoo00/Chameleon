@@ -46,16 +46,12 @@ def mask_to_box(mask):
     return np.array([x0, y0, x1, y1])
 
 @cache_resource
-def get_sd_t2i(tag):
+def get_sd(tag):
     repo = sd_repos[tag]
-    m = AutoPipelineForText2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
-    return m
-
-@cache_resource
-def get_sd_i2i(tag):
-    repo = sd_repos[tag]
-    m = AutoPipelineForImage2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
-    return m
+    t2i = AutoPipelineForText2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+    i2i = AutoPipelineForImage2Image.from_pipe(t2i).to("cuda")
+    #i2i.enable_model_cpu_offload()
+    return t2i, i2i
 
 @cache_resource
 def get_mSAM():
@@ -82,6 +78,7 @@ def txt2img(pipe, data, step_callback):
                   guidance_scale=data.extraData["guidance_scale"], 
                   generator=generator,
                   callback=step_callback).images[0]
+    torch.cuda.empty_cache()
     return image
 
 def img2img(pipe, img, data, step_callback):
@@ -97,12 +94,13 @@ def img2img(pipe, img, data, step_callback):
                   guidance_scale=data.extraData["guidance_scale"], 
                   generator=generator,
                   callback=step_callback).images[0]
+    torch.cuda.empty_cache()
     return image
 
 
-class ExpandEdge(nn.Module):
+class ExpandEdge_(nn.Module):
     def __init__(self, strength=1):
-        super(ExpandEdge, self).__init__()
+        super(ExpandEdge_, self).__init__()
         self.kernel_size = 3+2*strength
         kernel = torch.ones((1,1,self.kernel_size,self.kernel_size), dtype=torch.float)
         self.weight = nn.Parameter(data=kernel, requires_grad=False)
@@ -113,3 +111,13 @@ class ExpandEdge(nn.Module):
         mask_new = torch.zeros_like(x)
         mask_new[x>0 and x<(self.kernel_size**2)] = 1
         return mask_new
+    
+def ExpandEdge(mask, strength=1):
+    h, w = mask.shape
+    kernel_size = 3+2*strength
+    mask = torch.from_numpy(mask).to("cuda").float().unsqueeze(0).unsqueeze(0)
+    kernel = torch.ones((1,1,kernel_size,kernel_size), device="cuda")
+    x = F.conv2d(mask, kernel, padding=kernel_size//2)
+    res = ((x>0) & (x<(kernel_size**2)))
+    res = res.cpu().numpy().reshape(h, w)
+    return res

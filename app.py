@@ -49,7 +49,7 @@ class Txt2Img(IFieldsPlugin):
         def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
-        pipe = get_sd_t2i(data.extraData["version"])
+        pipe = get_sd(data.extraData["version"])[0]
         return txt2img(pipe, data, callback)
 
 
@@ -77,11 +77,8 @@ class Img2Img(IFieldsPlugin):
         def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
-        img_url = data.nodeData.src
-        response = requests.get(img_url)
-        img = Image.open(BytesIO(response.content)).convert("RGB")
-
-        pipe = get_sd_i2i(data.extraData["version"])
+        img = await self.load_image(data.nodeData.src)
+        pipe = get_sd(data.extraData["version"])[1]
         return img2img(pipe, img, data, callback)
 
 
@@ -135,10 +132,10 @@ class Matting(IFieldsPlugin):
 
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
-        img_url = url_node.src
-        mask_url = mask_node.src
-        img = Image.open(BytesIO(requests.get(img_url).content)).convert("RGB")
-        mask = Image.open(BytesIO(requests.get(mask_url).content)).convert("L")
+        img = await self.load_image(url_node.src)
+        img = img.convert("RGB")
+        mask = await self.load_image(mask_node.src)
+        mask = mask.convert("L")
         box = mask_to_box(mask)
         
         model = get_mSAM()
@@ -151,7 +148,40 @@ class Matting(IFieldsPlugin):
         
         img_masked = np.concatenate((np.array(img), (mask_fined[:,:,None]*255).astype(np.uint8)), axis=2)
         img_masked = Image.fromarray(img_masked)
-        return img_masked
+
+        mask_edge = ExpandEdge(mask_fined, 10)
+        return [img_masked, Image.fromarray((mask_edge*255).astype(np.uint8))]
+    
+class Fusing(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=constants.SOD_ICON,
+            tooltip=I18N(
+                zh="融合",
+                en="Images Fusing",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="融合",
+                    en="Images Fusing",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+
+        url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
+        img_url0 = url_nodes[0].src
+        img_url1 = url_nodes[1].src
+        
+        img0 = Image.open(BytesIO(requests.get(img_url0).content))
+        img1 = Image.open(BytesIO(requests.get(img_url1).content))
+        
+        return [img0, img1]
 
 
 # groups
@@ -240,10 +270,42 @@ class ImageAndMaskFollowers(IPluginGroup):
                 },
             ),
         )
+    
+class ImagesFollowers(IPluginGroup):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_group_styles,
+            offsetX=-48,
+            expandOffsetX=64,
+            tooltip=I18N(
+                zh="一组利用两张图片来进行融合的插件",
+                en="A set of plugins that fuse two images",
+            ),
+            nodeConstraintRules=NodeConstraintRules(
+                exactly=[NodeConstraints.IMAGE, NodeConstraints.IMAGE]
+            ),
+            pivot=PivotType.RT,
+            follow=True,
+            pluginInfo=IPluginGroupInfo(
+                name=I18N(
+                    zh="融合工具箱",
+                    en="Fusing Toolbox",
+                ),
+                header=I18N(
+                    zh="融合工具箱",
+                    en="Fusing Toolbox",
+                ),
+                plugins={
+                    "fusing": Fusing,
+                },
+            ),
+        )
 
 # uncomment this line to pre-load the models
 # get_apis()
 register_plugin("static")(StaticPlugins)
 register_plugin("image_followers")(ImageFollowers)
+register_plugin("images_followers")(ImagesFollowers)
 register_plugin("image_and_mask_followers")(ImageAndMaskFollowers)
 app = App()
