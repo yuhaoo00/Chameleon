@@ -4,11 +4,12 @@ import numpy as np
 import torch.nn as nn
 import torch.nn.functional as F
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image
+from extensions.IPAdapter.ip_adapter import IPAdapterXL, IPAdapter
 
 sd_repos = {
-    "base_sd_1.5": "runwayml/stable-diffusion-v1-5",
-    "base_sd_2.1": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-2-1",
-    "base_sdxl_1.0": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-xl-base-1.0",
+    "SD 1.5": "runwayml/stable-diffusion-v1-5",
+    "SD 2.1": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-2-1",
+    "SDxl 1.0": "/mnt/Data/CodeML/SD/CKPTS/stabilityai--stable-diffusion-xl-base-1.0",
 }
 
 def transform_mask(mask, resize=None):
@@ -45,13 +46,41 @@ def mask_to_box(mask):
         y1 -= 1
     return np.array([x0, y0, x1, y1])
 
+
 @cache_resource
-def get_sd(tag):
+def get_sd_t2i(tag):
+    torch.cuda.empty_cache()
     repo = sd_repos[tag]
     t2i = AutoPipelineForText2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+    return t2i
+
+def get_sd_i2i(tag, t2i=None):
+    torch.cuda.empty_cache()
+    if t2i is None:
+        t2i = get_sd_t2i(tag)
     i2i = AutoPipelineForImage2Image.from_pipe(t2i).to("cuda")
-    #i2i.enable_model_cpu_offload()
-    return t2i, i2i
+    return i2i
+
+def get_ipadapter(tag, t2i=None):
+    torch.cuda.empty_cache()
+    if t2i is None:
+        t2i = get_sd_t2i(tag)
+    if tag == "SDxl 1.0":
+        ip_model = IPAdapterXL(t2i, 
+                            "/mnt/Data/CodeML/SD/CKPTS/IP-Adapter/sdxl_models/image_encoder", 
+                            "/mnt/Data/CodeML/SD/CKPTS/IP-Adapter/sdxl_models/ip-adapter_sdxl.bin",
+                            "cuda")
+    elif tag == "SD 1.5":
+        ip_model = IPAdapter(t2i, 
+                            "/mnt/Data/CodeML/SD/CKPTS/IP-Adapter/models/image_encoder", 
+                            "/mnt/Data/CodeML/SD/CKPTS/IP-Adapter/models/ip-adapter_sd15.bin",
+                            "cuda")
+    else:
+        ip_model = None
+        print("Unsupported SD Version")
+    return ip_model
+
+
 
 @cache_resource
 def get_mSAM():
@@ -70,16 +99,17 @@ def txt2img(pipe, data, step_callback):
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
-    image = pipe(prompt=data.extraData["text"],
+    images = pipe(prompt=data.extraData["text"],
                   negative_prompt=data.extraData["negative_prompt"],
                   height=data.extraData["h"],
                   width=data.extraData["w"],
                   num_inference_steps=data.extraData["num_steps"],
                   guidance_scale=data.extraData["guidance_scale"], 
                   generator=generator,
-                  callback=step_callback).images[0]
+                  num_images_per_prompt=data.extraData["num_samples"],
+                  callback=step_callback).images
     torch.cuda.empty_cache()
-    return image
+    return images
 
 def img2img(pipe, img, data, step_callback):
     if data.extraData["seed"] != -1:
@@ -87,16 +117,35 @@ def img2img(pipe, img, data, step_callback):
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
-    image = pipe(prompt=data.extraData["text"], 
+    images = pipe(prompt=data.extraData["text"], 
                   image=img, 
                   negative_prompt=data.extraData["negative_prompt"],
                   num_inference_steps=data.extraData["num_steps"],
                   guidance_scale=data.extraData["guidance_scale"], 
                   generator=generator,
-                  callback=step_callback).images[0]
+                  num_images_per_prompt=data.extraData["num_samples"],
+                  callback=step_callback).images
     torch.cuda.empty_cache()
-    return image
+    return images
 
+
+def style_transfer(pipe, img, data, step_callback):
+    if data.extraData["seed"] != -1:
+        generator=torch.Generator(device="cuda").manual_seed(data.extraData["seed"])
+    else:
+        generator=torch.Generator(device="cuda")
+        generator.seed()
+    images = pipe.generate(pil_image=img,
+                          prompt=data.extraData["text"],
+                          negative_prompt=data.extraData["negative_prompt"],
+                          num_inference_steps=data.extraData["num_steps"],
+                          generator=generator,
+                          guidance_scale=data.extraData["guidance_scale"],
+                          scale=data.extraData["scale"],
+                          num_samples=data.extraData["num_samples"],
+                          callback=step_callback)
+    torch.cuda.empty_cache()
+    return images
 
 class ExpandEdge_(nn.Module):
     def __init__(self, strength=1):

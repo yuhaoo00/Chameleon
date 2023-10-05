@@ -49,7 +49,7 @@ class Txt2Img(IFieldsPlugin):
         def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
-        pipe = get_sd(data.extraData["version"])[0]
+        pipe = get_sd_t2i(data.extraData["version"])
         return txt2img(pipe, data, callback)
 
 
@@ -70,6 +70,7 @@ class Img2Img(IFieldsPlugin):
                 ),
                 numColumns=2,
                 definitions=img2img_fields,
+                #exportFullImages=True,
             ),
         )
 
@@ -78,8 +79,38 @@ class Img2Img(IFieldsPlugin):
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
-        pipe = get_sd(data.extraData["version"])[1]
+        pipe = get_sd_i2i(data.extraData["version"])
         return img2img(pipe, img, data, callback)
+
+
+class StyleTransfer(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="以当前图片为风格参考图，生成符合文本描述的图片",
+                en="Style Transfer"
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="风格迁移",
+                    en="Style Transfer",
+                ),
+                numColumns=2,
+                definitions=st_fields,
+                #exportFullImages=True,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+            return self.send_progress((step+1) / data.extraData["num_steps"])
+        
+        img = await self.load_image(data.nodeData.src)
+        pipe = get_ipadapter(data.extraData["version"])
+        return style_transfer(pipe, img, data, callback)
 
 
 class SR(IFieldsPlugin):
@@ -125,6 +156,7 @@ class Matting(IFieldsPlugin):
                     en="Image Matting",
                 ),
                 definitions={},
+                #exportFullImages=True,
             ),
         )
 
@@ -150,7 +182,8 @@ class Matting(IFieldsPlugin):
         img_masked = Image.fromarray(img_masked)
 
         mask_edge = ExpandEdge(mask_fined, 10)
-        return [img_masked, Image.fromarray((mask_edge*255).astype(np.uint8))]
+        mask_edge = Image.fromarray(mask_edge)
+        return [img_masked, mask_edge]
     
 class Fusing(IFieldsPlugin):
     @property
@@ -169,6 +202,7 @@ class Fusing(IFieldsPlugin):
                     en="Images Fusing",
                 ),
                 definitions={},
+                #exportFullImages=True,
             ),
         )
 
@@ -178,8 +212,8 @@ class Fusing(IFieldsPlugin):
         img_url0 = url_nodes[0].src
         img_url1 = url_nodes[1].src
         
-        img0 = Image.open(BytesIO(requests.get(img_url0).content))
-        img1 = Image.open(BytesIO(requests.get(img_url1).content))
+        img0 = await self.load_image(img_url0)
+        img1 = await self.load_image(img_url1)
         
         return [img0, img1]
 
@@ -236,6 +270,7 @@ class ImageFollowers(IPluginGroup):
                 ),
                 plugins={
                     "img2img": Img2Img,
+                    "styletransfer": StyleTransfer,
                 },
             ),
         )

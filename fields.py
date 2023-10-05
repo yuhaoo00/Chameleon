@@ -9,7 +9,7 @@ from cflearn.api.cv.diffusion import ControlNetHints
 # common styles
 common_styles = dict(
     w=0.75,
-    h=0.6,
+    h=0.4,
     maxW=800,
     minH=520,
     useModal=True,
@@ -61,8 +61,8 @@ text = ITextField(
     ),
 )
 version_field = ISelectField(
-    default="base_sd_2.1",
-    options=["base_sdxl_1.0", "base_sd_2.1", "base_sd_1.5"],
+    default="SDxl 1.0",
+    options=["SDxl 1.0", "SD 2.1", "SD 1.5"],
     label=I18N(
         zh="模型", 
         en="Model"
@@ -98,6 +98,17 @@ negative_prompt = ITextField(
         en="The negative description of the image",
     ),
 )
+num_samples = INumberField(
+    default=1,
+    min=1,
+    max=4,
+    step=1,
+    isInt=True,
+    label=I18N(
+        zh="生成数量",
+        en="Number of Samples",
+    ),
+)
 guidance_scale = INumberField(
     default=7.5,
     min=-20.0,
@@ -125,17 +136,7 @@ seed = INumberField(
         en="'-1' means the seed will be randomly generated",
     ),
 )
-use_circular = IBooleanField(
-    default=False,
-    label=I18N(
-        zh="循环纹样",
-        en="Circular",
-    ),
-    tooltip=I18N(
-        zh="是否让模型尝试生成四方连续纹样",
-        en="Whether should we generate circular patterns (i.e., generate textures)",
-    ),
-)
+
 use_highres = IBooleanField(
     default=False,
     label=I18N(
@@ -200,11 +201,12 @@ txt2img_fields = OrderedDict(
     negative_prompt=negative_prompt,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    use_circular=use_circular,
+    #use_circular=use_circular,
     seed=seed,
     use_highres=use_highres,
-    lora=lora_field,
+    #lora=lora_field,
     highres_fidelity=highres_fidelity,
+    num_samples=num_samples,
 )
 txt2img_text_fields = OrderedDict(
     w=w_field,
@@ -214,10 +216,10 @@ txt2img_text_fields = OrderedDict(
     sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    use_circular=use_circular,
+    #use_circular=use_circular,
     seed=seed,
     use_highres=use_highres,
-    lora=lora_field,
+    #lora=lora_field,
     highres_fidelity=highres_fidelity,
 )
 # sd_inpainting / sd_outpainting fields
@@ -264,11 +266,43 @@ img2img_fields = OrderedDict(
     negative_prompt=negative_prompt,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    use_circular=use_circular,
+    #use_circular=use_circular,
     seed=seed,
     use_highres=use_highres,
-    lora=lora_field,
+    #lora=lora_field,
     highres_fidelity=highres_fidelity,
+    num_samples=num_samples,
+)
+# styletransfer fields
+scale = INumberField(
+    default=1.0,
+    min=0.0,
+    max=1.0,
+    step=0.1,
+    label=I18N(
+        zh="缩放新增的注意力",
+        en="Adapter Scale",
+    ),
+)
+st_prompt = text.copy()
+st_prompt.numRows = 3
+st_fields = OrderedDict(
+    text=st_prompt,
+    negative_prompt=negative_prompt,
+    version=ISelectField(
+        default="SDxl 1.0",
+        options=["SDxl 1.0", "SD 1.5"],
+        label=I18N(
+            zh="模型", 
+            en="Model"
+        ),
+    ),
+    sampler=sampler,
+    num_steps=num_steps,
+    guidance_scale=guidance_scale,
+    seed=seed,
+    scale=scale,
+    num_samples=num_samples,
 )
 # super resolution fields
 sr_w_field = w_field.copy()
@@ -408,6 +442,17 @@ prompt_enhance_fields = OrderedDict(
         tooltip=I18N(zh="返回的结果数量", en="The number of results to return"),
     ),
 )
+# Global Version
+global_version_fields = OrderedDict(
+    version=ISelectField(
+            default="sd_2.1",
+            options=["sdxl_1.0", "sd_2.1", "sd_1.5"],
+            label=I18N(
+                zh="模型", 
+                en="Model"
+            ),
+        ),
+)
 
 
 __all__ = [
@@ -418,6 +463,7 @@ __all__ = [
     "txt2img_fields",
     "txt2img_text_fields",
     "img2img_fields",
+    "st_fields",
     "sr_fields",
     "inpainting_fields",
     "sd_inpainting_fields",
@@ -426,4 +472,5 @@ __all__ = [
     "multi_controlnet_fields",
     "harmonization_fields",
     "prompt_enhance_fields",
+    "global_version_fields",
 ]
