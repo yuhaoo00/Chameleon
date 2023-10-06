@@ -1,4 +1,6 @@
 import os
+import cv2
+import math
 import json
 import requests
 import numpy as np
@@ -16,6 +18,7 @@ from cftool.misc import shallow_copy_dict
 from cfcreator.common import InpaintingMode
 from cflearn.misc.toolkit import new_seed
 from cfcreator.sdks.apis import ALL_LATENCIES_KEY
+import torchvision.transforms.functional as TF
 
 from cfdraw import *
 
@@ -181,9 +184,7 @@ class Matting(IFieldsPlugin):
         img_masked = np.concatenate((np.array(img), (mask_fined[:,:,None]*255).astype(np.uint8)), axis=2)
         img_masked = Image.fromarray(img_masked)
 
-        mask_edge = ExpandEdge(mask_fined, 10)
-        mask_edge = Image.fromarray(mask_edge)
-        return [img_masked, mask_edge]
+        return [img_masked]
     
 class Fusing(IFieldsPlugin):
     @property
@@ -209,13 +210,43 @@ class Fusing(IFieldsPlugin):
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
 
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
-        img_url0 = url_nodes[0].src
-        img_url1 = url_nodes[1].src
+
+        data0 = url_nodes[0]
+        data1 = url_nodes[1]
+        img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
+        img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
+        img0 = img0.convert("RGBA")
+        img1 = img1.convert("RGBA")
+        if data0.z > data1.z:
+            data0, data1 = data1, data0
+            img0, img1 = img1, img0
+        # img0 在 img1 上面
+
+        def get_angle(a,c,w,h):
+            theta = np.arccos(a/w)
+            if np.sin(theta)*c <= 0:
+                theta = -theta
+            return theta
         
-        img0 = await self.load_image(img_url0)
-        img1 = await self.load_image(img_url1)
+        theta0 = get_angle(data0.transform.a, data0.transform.c, data0.w, data0.h)
+        theta1 = get_angle(data1.transform.a, data1.transform.c, data1.w, data1.h)
+
+
+        img0 = img0.resize(size=[int(data0.w), int(data0.h)])
+        img1 = img1.resize(size=[int(data1.w), int(data1.h)]).rotate(np.degrees(theta1), expand=True)
         
-        return [img0, img1]
+        new = Image.new("RGBA", [int(max(data1.w, data0.x-data1.x+data0.w)), int(max(data1.h, data0.y-data1.y+data0.h))], color=(0,0,0,0))
+        new.paste(img0, (int(data0.x-data1.x), int(data0.y-data1.y)), mask=img0.getchannel("A"))
+        new = new.rotate(np.degrees(theta0), center=[int(data0.x-data1.x), int(data0.y-data1.y)])
+
+        img1.paste(new, (0,0), mask=new.getchannel("A"))
+
+        mask = np.array(new.getchannel("A"))
+        mask_edge = ExpandEdge(mask, 10)
+        mask_edge = Image.fromarray(mask_edge[:int(data1.h),:int(data1.w)])
+
+
+        return [img1, mask_edge]
 
 
 # groups

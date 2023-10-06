@@ -138,6 +138,8 @@ def style_transfer(pipe, img, data, step_callback):
     images = pipe.generate(pil_image=img,
                           prompt=data.extraData["text"],
                           negative_prompt=data.extraData["negative_prompt"],
+                          height=data.extraData["h"],
+                          width=data.extraData["w"],
                           num_inference_steps=data.extraData["num_steps"],
                           generator=generator,
                           guidance_scale=data.extraData["guidance_scale"],
@@ -162,6 +164,7 @@ class ExpandEdge_(nn.Module):
         return mask_new
     
 def ExpandEdge(mask, strength=1):
+    mask = mask/255.
     h, w = mask.shape
     kernel_size = 3+2*strength
     mask = torch.from_numpy(mask).to("cuda").float().unsqueeze(0).unsqueeze(0)
