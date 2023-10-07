@@ -2,7 +2,7 @@ from cfdraw import *
 import torch
 from extensions.IPAdapter.ip_adapter import IPAdapterXL, IPAdapter
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoPipelineForInpainting
-from diffusers import StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
+from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
 from diffusers import DPMSolverMultistepScheduler, 	EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler
 
 main_dir = "/mnt/Data/CodeML/SD/CKPTS/"
@@ -48,6 +48,12 @@ def get_controlnet(tag):
                                              use_safetensors=True,
                                              variant="fp16").to("cuda")
         pipe = StableDiffusionControlNetInpaintPipeline(controlnet=cn, **t2i.components)
+    elif tag == "v11_sd15_tile":
+        t2i = get_sd_t2i("SD v1.5")
+        cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11f1e_sd15_tile",
+                                             torch_dtype=torch.float16
+                                             ).to("cuda")
+        pipe = StableDiffusionControlNetPipeline(controlnet=cn, **t2i.components)
     return pipe
 
 def get_ipadapter(tag):

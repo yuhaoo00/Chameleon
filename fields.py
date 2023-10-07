@@ -166,34 +166,17 @@ highres_fidelity = INumberField(
     ),
     condition="use_highres",
 )
-lora_field = IListField(
-    label="LoRA",
-    tooltip=I18N(zh="配置 LoRA 模型", en="Setup LoRA models"),
-    item=dict(
-        model=ISelectLocalField(
-            label=I18N(
-                zh="模型",
-                en="Model",
-            ),
-            path=str(Path(__file__).parent / "lora"),
-            noExt=True,
-            onlyFiles=True,
-            regex=".*\\.safetensors",
-            defaultPlaceholder="None",
-        ),
-        strength=INumberField(
-            default=1.0,
-            min=0.0,
-            max=4.0,
-            step=0.05,
-            precision=2,
-            label=I18N(
-                zh="强度",
-                en="Strength",
-            ),
-        ),
+strength = INumberField(
+    default=0.8,
+    min=0.0,
+    max=1.0,
+    step=0.02,
+    label=I18N(
+        zh="初始加噪强度",
+        en="Initial Noise Strength",
     ),
 )
+
 # txt2img
 txt2img_fields = OrderedDict(
     w=w_field,
@@ -226,16 +209,6 @@ txt2img_text_fields = OrderedDict(
     highres_fidelity=highres_fidelity,
 )
 # img2img fields
-strength = INumberField(
-    default=0.8,
-    min=0.0,
-    max=1.0,
-    step=0.02,
-    label=I18N(
-        zh="初始加噪强度",
-        en="Initial Noise Strength",
-    ),
-)
 img2img_prompt = text.copy()
 img2img_prompt.numRows = 3
 img2img_fields = OrderedDict(
@@ -253,6 +226,7 @@ img2img_fields = OrderedDict(
     highres_fidelity=highres_fidelity,
     num_samples=num_samples,
 )
+
 # styletransfer fields
 scale = INumberField(
     default=1.0,
@@ -290,16 +264,6 @@ st_fields = OrderedDict(
 # sd_inpainting / sd_outpainting fields
 inpainting_prompt = text.copy()
 inpainting_prompt.numRows = 3
-strength = INumberField(
-    default=0.8,
-    min=0.0,
-    max=1.0,
-    step=0.02,
-    label=I18N(
-        zh="初始加噪强度",
-        en="Initial Noise Strength",
-    ),
-)
 inpainting_fields = OrderedDict(
     w=w_field,
     h=h_field,
@@ -329,7 +293,6 @@ inpainting_fields = OrderedDict(
     ),
 )
 # controlnet
-
 controlnet_scale = INumberField(
     default=0.5,
     min=0.0,
@@ -339,6 +302,20 @@ controlnet_scale = INumberField(
         zh="条件控制强度",
         en="Conditioning Scale",
     ),
+)
+tile_prompt = text.copy()
+tile_prompt.numRows = 3
+tile_fields = OrderedDict(
+    w=w_field,
+    h=h_field,
+    text=tile_prompt,
+    sampler=sampler,
+    negative_prompt=negative_prompt,
+    num_steps=num_steps,
+    guidance_scale=guidance_scale,
+    seed=seed,
+    num_samples=num_samples,
+    controlnet_conditioning_scale=controlnet_scale,
 )
 
 cn_inpainting_fields = OrderedDict(
@@ -380,7 +357,6 @@ sr_fields = OrderedDict(
 __all__ = [
     "common_styles",
     "common_group_styles",
-    "lora_field",
     "version_field",
     "txt2img_fields",
     "txt2img_text_fields",
@@ -389,4 +365,5 @@ __all__ = [
     "sr_fields",
     "inpainting_fields",
     "cn_inpainting_fields",
+    "tile_fields",
 ]

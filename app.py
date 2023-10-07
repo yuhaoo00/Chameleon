@@ -66,6 +66,35 @@ class Img2Img(IFieldsPlugin):
         pipe = get_sd_i2i(data.extraData["version"])
         return img2img(pipe, img, data, callback)
     
+class Tile(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="重绘细节",
+                en="Repaint Details (Tile)",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="重绘细节",
+                    en="Repaint Details (Tile)",
+                ),
+                numColumns=2,
+                definitions=tile_fields,
+                #exportFullImages=True,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, *args) -> bool:
+            return self.send_progress(step / data.extraData["num_steps"])
+        
+        img = await self.load_image(data.nodeData.src)
+        pipe = get_controlnet("v11_sd15_tile")
+        return cn_tile(pipe, img, data, callback)
+    
 class Inpainting(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
@@ -300,6 +329,7 @@ class ImageFollowers(IPluginGroup):
                 plugins={
                     "img2img": Img2Img,
                     "styletransfer": StyleTransfer,
+                    "tile": Tile,
                 },
             ),
         )
