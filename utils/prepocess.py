@@ -4,14 +4,12 @@ import numpy as np
 import torch.nn.functional as F
 from PIL import Image
 
-def transform_mask(mask, resize=None):
-    if resize is not None:
-        mask = mask.resize(resize)
-    # PIL Image to numpy array
+def transform_mask(mask):
+    mask = mask.getchannel("A").convert("RGB")
     mask = np.array(mask)
-    mask[mask>0] = 1
-    #mask = -mask+1
-    return mask[None,:,:]#.astype(bool)
+    mask[mask >0] = 255
+    mask = Image.fromarray(mask)
+    return mask
 
 def mask_to_box(mask):
     mask = np.array(mask)

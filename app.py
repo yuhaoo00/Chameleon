@@ -30,7 +30,7 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+        def callback(step: int, *args) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
         pipe = get_sd_t2i(data.extraData["version"])
@@ -59,12 +59,46 @@ class Img2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+        def callback(step: int, *args) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
         pipe = get_sd_i2i(data.extraData["version"])
         return img2img(pipe, img, data, callback)
+    
+class Inpainting(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.SD_INPAINTING_ICON,
+            tooltip=I18N(
+                zh="在蒙版区域内填充符合描述的内容",
+                en="Replace the masked area and fill it with the description",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="局部替换",
+                    en="Erase & Replace",
+                ),
+                numColumns=2,
+                definitions=inpainting_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, *args) -> bool:
+            return self.send_progress(step / data.extraData["num_steps"])
+
+        url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
+        mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
+        img = await self.load_image(url_node.src)
+        img = img.convert("RGB")
+        mask = await self.load_image(mask_node.src)
+        mask = transform_mask(mask)
+
+        pipe = get_sd_inpaint(data.extraData["version"])
+        return inpaint(pipe, img, mask, data, callback)
 
 
 class StyleTransfer(IFieldsPlugin):
@@ -89,7 +123,7 @@ class StyleTransfer(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, num_steps: int, latents: torch.FloatTensor) -> bool:
+        def callback(step: int, *args) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
@@ -262,6 +296,7 @@ class ImageAndMaskFollowers(IPluginGroup):
                 ),
                 plugins={
                     "matting": Matting,
+                    "inpainting": Inpainting,
                 },
             ),
         )

@@ -61,8 +61,8 @@ text = ITextField(
     ),
 )
 version_field = ISelectField(
-    default="SDxl 1.0",
-    options=["SDxl 1.0", "SD 2.1", "SD 1.5"],
+    default="SDXL v1.0",
+    options=["SDXL v1.0", "SD v2.1", "SD v1.5"],
     label=I18N(
         zh="模型", 
         en="Model"
@@ -222,45 +222,22 @@ txt2img_text_fields = OrderedDict(
     #lora=lora_field,
     highres_fidelity=highres_fidelity,
 )
-# sd_inpainting / sd_outpainting fields
-sd_inpainting_prompt = text.copy()
-sd_inpainting_prompt.numRows = 3
-sd_inpainting_fields = OrderedDict(
-    text=sd_inpainting_prompt,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    negative_prompt=negative_prompt,
-    seed=seed,
-    focus_mode=IBooleanField(
-        default=False,
-        label=I18N(zh="聚焦模式", en="Focus Mode"),
-        tooltip=I18N(
-            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素，此时生成的效果通常会富有更多的细节",
-            en="When enabled, the model will only focus on the masked region and some surrounding pixels, which usually results in more detailed images",
-        ),
-    ),
-)
 # img2img fields
-fidelity = INumberField(
-    default=0.2,
+strength = INumberField(
+    default=0.8,
     min=0.0,
     max=1.0,
-    step=0.05,
+    step=0.02,
     label=I18N(
-        zh="相似度",
-        en="Fidelity",
-    ),
-    tooltip=I18N(
-        zh="生成图片与当前图片的相似度",
-        en="How similar the generated image should be to the input image",
+        zh="初始加噪强度",
+        en="Initial Noise Strength",
     ),
 )
 img2img_prompt = text.copy()
 img2img_prompt.numRows = 3
 img2img_fields = OrderedDict(
     text=img2img_prompt,
-    fidelity=fidelity,
+    strength=strength,
     version=version_field,
     sampler=sampler,
     negative_prompt=negative_prompt,
@@ -292,8 +269,8 @@ st_fields = OrderedDict(
     text=st_prompt,
     negative_prompt=negative_prompt,
     version=ISelectField(
-        default="SDxl 1.0",
-        options=["SDxl 1.0", "SD 1.5"],
+        default="SDXL v1.0",
+        options=["SDXL v1.0", "SD v1.5"],
         label=I18N(
             zh="模型", 
             en="Model"
@@ -306,6 +283,49 @@ st_fields = OrderedDict(
     scale=scale,
     num_samples=num_samples,
 )
+
+# sd_inpainting / sd_outpainting fields
+inpainting_prompt = text.copy()
+inpainting_prompt.numRows = 3
+strength = INumberField(
+    default=0.8,
+    min=0.0,
+    max=1.0,
+    step=0.02,
+    label=I18N(
+        zh="初始加噪强度",
+        en="Initial Noise Strength",
+    ),
+)
+inpainting_fields = OrderedDict(
+    w=w_field,
+    h=h_field,
+    version=ISelectField(
+        default="SDXL v1.0",
+        options=["SDXL v1.0", "SD v2.1", "SD v2(ft)"],
+        label=I18N(
+            zh="模型", 
+            en="Model"
+        ),
+    ),
+    text=inpainting_prompt,
+    strength=strength,
+    sampler=sampler,
+    num_steps=num_steps,
+    guidance_scale=guidance_scale,
+    negative_prompt=negative_prompt,
+    seed=seed,
+    num_samples=num_samples,
+    focus_mode=IBooleanField(
+        default=False,
+        label=I18N(zh="聚焦模式", en="Focus Mode"),
+        tooltip=I18N(
+            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素，此时生成的效果通常会富有更多的细节",
+            en="When enabled, the model will only focus on the masked region and some surrounding pixels, which usually results in more detailed images",
+        ),
+    ),
+)
+
 # super resolution fields
 sr_w_field = w_field.copy()
 sr_w_field.default = 2048
@@ -326,135 +346,6 @@ sr_fields = OrderedDict(
     target_w=sr_w_field,
     target_h=sr_h_field,
 )
-# inpainting fields
-inpainting_fields = OrderedDict(
-    model=ISelectField(
-        default="lama",
-        options=["sd", "lama"],
-        label=I18N(
-            zh="模型",
-            en="Model",
-        ),
-        tooltip=I18N(
-            zh="用来进行局部擦除的模型；`lama` 会更快、更稳定，`sd` 会比较慢，但有时会提供更多的细节",
-            en=(
-                "The inpainting model to use. "
-                "`lama` is faster and more stable, but `sd` may introduce more details."
-            ),
-        ),
-    ),
-)
-# variation fields
-variation_fields = OrderedDict(fidelity=img2img_fields["fidelity"])
-# controlnet stuffs
-## controlnet hints
-controlnet_hint_fields = I18NSelectField(
-    mapping={
-        ControlNetHints.CANNY: I18N(zh="Canny 边缘", en="Canny Edge"),
-        ControlNetHints.DEPTH: I18N(zh="深度图", en="Depth Image"),
-        ControlNetHints.MLSD: I18N(zh="MLSD 边缘", en="MLSD Edge"),
-        ControlNetHints.POSE: I18N(zh="人体姿态", en="Human Pose"),
-    },
-    default=ControlNetHints.CANNY,
-    label=I18N(zh="参考图类型", en="Hint Type"),
-)
-## multi ControNet
-controlnet_fields = OrderedDict(
-    type=controlnet_hint_fields,
-    hint_url=IImageField(default="", label=I18N(zh="参考图", en="Hint Image")),
-    bypass_annotator=IBooleanField(
-        default=False,
-        label=I18N(zh="跳过预处理器", en="Bypass Annotator"),
-        tooltip=I18N(
-            zh="跳过 ControlNet 的预处理步骤，适用于选择的图片已经是参考图的情况",
-            en="Bypass the ControlNet annotator, useful when you have already selected the hint image",
-        ),
-    ),
-    hint_start=INumberField(
-        default=0.0,
-        min=0.0,
-        max=1.0,
-        step=0.01,
-        label=I18N(zh="参考图生效时机", en="Hint Start"),
-    ),
-    control_strength=INumberField(
-        default=1.0,
-        min=0.0,
-        max=2.0,
-        step=0.01,
-        label=I18N(zh="参考强度", en="Control Strength"),
-    ),
-)
-multi_controlnet_field = IListField(
-    label="ControlNet",
-    tooltip=I18N(zh="配置 multi ControlNet", en="Setup multi ControlNet"),
-    item=controlnet_fields,
-)
-multi_controlnet_prompt = text.copy()
-multi_controlnet_prompt.numRows = 4
-multi_controlnet_negative_prompt = negative_prompt.copy()
-multi_controlnet_negative_prompt.numRows = 4
-multi_controlnet_fields = OrderedDict(
-    prompt=multi_controlnet_prompt,
-    url=IImageField(
-        default="",
-        label=I18N(zh="初始图", en="Init Image"),
-        tooltip=I18N(zh="可选项，不选也没问题", en="This is optional, you can leave it blank"),
-    ),
-    fidelity=fidelity,
-    max_wh=max_wh_field,
-    base_model=version_field,
-    negative_prompt=multi_controlnet_negative_prompt,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    seed=seed,
-    lora=lora_field,
-    controls=multi_controlnet_field,
-)
-# image harmonization
-harmonization_fields = OrderedDict(
-    url=IImageField(
-        default="",
-        label=I18N(zh="原图", en="Image"),
-        tooltip=I18N(zh="想要进行风格融合的原图", en="The original image to be harmonized"),
-    ),
-    mask_url=IImageField(
-        default="",
-        label=I18N(zh="前景", en="Foreground"),
-        tooltip=I18N(zh="想要进行风格融合的前景区域", en="The foreground area to be harmonized"),
-    ),
-    strength=INumberField(
-        default=1.0,
-        min=0.0,
-        max=2.0,
-        step=0.01,
-        label=I18N(zh="融合强度", en="Strength"),
-    ),
-)
-# prompt enhance
-prompt_enhance_fields = OrderedDict(
-    num_return_sequences=INumberField(
-        default=1,
-        min=1,
-        max=3,
-        step=1,
-        isInt=True,
-        label=I18N(zh="数量", en="Num Returns"),
-        tooltip=I18N(zh="返回的结果数量", en="The number of results to return"),
-    ),
-)
-# Global Version
-global_version_fields = OrderedDict(
-    version=ISelectField(
-            default="sd_2.1",
-            options=["sdxl_1.0", "sd_2.1", "sd_1.5"],
-            label=I18N(
-                zh="模型", 
-                en="Model"
-            ),
-        ),
-)
 
 
 __all__ = [
@@ -468,11 +359,4 @@ __all__ = [
     "st_fields",
     "sr_fields",
     "inpainting_fields",
-    "sd_inpainting_fields",
-    "variation_fields",
-    "controlnet_hint_fields",
-    "multi_controlnet_fields",
-    "harmonization_fields",
-    "prompt_enhance_fields",
-    "global_version_fields",
 ]
