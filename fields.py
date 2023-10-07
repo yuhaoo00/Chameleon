@@ -1,9 +1,6 @@
 from cfdraw import *
 from pathlib import Path
 from collections import OrderedDict
-from cfcreator.common import SDSamplers
-from cflearn.api.cv.diffusion import SDVersions
-from cflearn.api.cv.diffusion import ControlNetHints
 
 
 # common styles
@@ -69,8 +66,14 @@ version_field = ISelectField(
     ),
 )
 sampler = ISelectField(
-    default=SDSamplers.K_EULER,
-    options=[sampler for sampler in SDSamplers],
+    default="Default",
+    options=["Default",
+             "Euler",
+             "Euler a",
+             "DPM++ 2M",
+             "DPM++ 2M Karras",
+             "DPM++ 2M SDE",
+             "DPM++ 2M SDE Karras",],
     label=I18N(
         zh="采样器",
         en="Sampler",

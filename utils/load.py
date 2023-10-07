@@ -2,6 +2,7 @@ from cfdraw import *
 import torch
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoPipelineForInpainting
 from extensions.IPAdapter.ip_adapter import IPAdapterXL, IPAdapter
+from diffusers import DPMSolverMultistepScheduler, 	EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler
 
 sd_repos = {
     "SD v1.5": "runwayml/stable-diffusion-v1-5",
@@ -60,3 +61,18 @@ def get_mSAM():
     mobile_sam.eval()
     predictor = SamPredictor(mobile_sam)
     return predictor
+
+def alter_sampler(pipe, sampler_name):
+    if sampler_name == "Euler":
+        pipe.scheduler = EulerDiscreteScheduler.from_config(pipe.scheduler.config)
+    elif sampler_name == "Euler a":
+        pipe.scheduler = EulerAncestralDiscreteScheduler.from_config(pipe.scheduler.config)
+    elif sampler_name == "DPM++ 2M":
+        pipe.scheduler = DPMSolverMultistepScheduler.from_config(pipe.scheduler.config)
+    elif sampler_name == "DPM++ 2M Karras":
+        pipe.scheduler = DPMSolverMultistepScheduler(use_karras_sigmas=True).from_config(pipe.scheduler.config)
+    elif sampler_name == "DPM++ 2M SDE":
+        pipe.scheduler = DPMSolverMultistepScheduler(algorithm_type="sde-dpmsolver++").from_config(pipe.scheduler.config)
+    elif sampler_name == "DPM++ 2M SDE Karras":
+        pipe.scheduler = DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type="sde-dpmsolver++").from_config(pipe.scheduler.config)
+    return pipe

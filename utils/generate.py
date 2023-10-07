@@ -1,5 +1,7 @@
 from cfdraw import *
 import torch
+from .load import *
+
 
 def txt2img(pipe, data, step_callback):
     if data.extraData["seed"] != -1:
@@ -7,6 +9,9 @@ def txt2img(pipe, data, step_callback):
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
+    
+    orig_sampler = pipe.scheduler
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
     images = pipe(prompt=data.extraData["text"],
                   negative_prompt=data.extraData["negative_prompt"],
                   height=data.extraData["h"],
@@ -16,6 +21,7 @@ def txt2img(pipe, data, step_callback):
                   generator=generator,
                   num_images_per_prompt=data.extraData["num_samples"],
                   callback=step_callback).images
+    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
@@ -25,6 +31,8 @@ def img2img(pipe, img, data, step_callback):
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
+    orig_sampler = pipe.scheduler
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
     images = pipe(prompt=data.extraData["text"], 
                   image=img, 
                   negative_prompt=data.extraData["negative_prompt"],
@@ -34,6 +42,7 @@ def img2img(pipe, img, data, step_callback):
                   generator=generator,
                   num_images_per_prompt=data.extraData["num_samples"],
                   callback=step_callback).images
+    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
@@ -43,6 +52,8 @@ def inpaint(pipe, img, mask, data, step_callback):
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
+    orig_sampler = pipe.scheduler
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
     images = pipe(prompt=data.extraData["text"],
                   image=img,
                   mask_image=mask,
@@ -55,17 +66,21 @@ def inpaint(pipe, img, mask, data, step_callback):
                   strength=data.extraData["strength"],
                   num_images_per_prompt=data.extraData["num_samples"],
                   callback=step_callback).images
+    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
 
-def style_transfer(pipe, img, data, step_callback):
+def style_transfer(model, img, data, step_callback):
     if data.extraData["seed"] != -1:
         generator=torch.Generator(device="cuda").manual_seed(data.extraData["seed"])
     else:
         generator=torch.Generator(device="cuda")
         generator.seed()
-    images = pipe.generate(pil_image=img,
+    orig_sampler = model.pipe.scheduler
+    model.pipe = alter_sampler(model.pipe, data.extraData["sampler"])
+
+    images = model.generate(pil_image=img,
                           prompt=data.extraData["text"],
                           negative_prompt=data.extraData["negative_prompt"],
                           height=data.extraData["h"],
@@ -76,5 +91,7 @@ def style_transfer(pipe, img, data, step_callback):
                           scale=data.extraData["scale"],
                           num_samples=data.extraData["num_samples"],
                           callback=step_callback)
+    
+    model.pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
