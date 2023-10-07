@@ -36,6 +36,16 @@ def mask_to_box(mask):
         y1 -= 1
     return np.array([x0, y0, x1, y1])
 
+def make_inpaint_condition(image, image_mask):
+    image = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+    image_mask = np.array(image_mask.convert("L")).astype(np.float32) / 255.0
+
+    assert image.shape[0:1] == image_mask.shape[0:1], "image and image_mask must have the same image size"
+    image[image_mask > 0.5] = -1.0  # set as masked pixel
+    image = np.expand_dims(image, 0).transpose(0, 3, 1, 2)
+    image = torch.from_numpy(image)
+    return image
+
 def get_angle(a,c,w,h):
     theta = np.arccos(a/w)
     if np.sin(theta)*c <= 0:
@@ -76,3 +86,5 @@ def easy_fusing(data0, data1, img0, img1):
     mask_edge = ExpandEdge(mask, 10)
     mask_edge = Image.fromarray(mask_edge[:int(data1.h),:int(data1.w)])
     return [img1, mask_edge]
+
+

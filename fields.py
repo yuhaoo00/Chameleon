@@ -305,7 +305,7 @@ inpainting_fields = OrderedDict(
     h=h_field,
     version=ISelectField(
         default="SDXL v1.0",
-        options=["SDXL v1.0", "SD v2.1", "SD v2(ft)"],
+        options=["SDXL v1.0", "SDXL (ft)", "SD v2.1", "SD v2(ft)"],
         label=I18N(
             zh="模型", 
             en="Model"
@@ -327,6 +327,32 @@ inpainting_fields = OrderedDict(
             en="When enabled, the model will only focus on the masked region and some surrounding pixels, which usually results in more detailed images",
         ),
     ),
+)
+# controlnet
+
+controlnet_scale = INumberField(
+    default=0.5,
+    min=0.0,
+    max=1.0,
+    step=0.02,
+    label=I18N(
+        zh="条件控制强度",
+        en="Conditioning Scale",
+    ),
+)
+
+cn_inpainting_fields = OrderedDict(
+    w=w_field,
+    h=h_field,
+    text=inpainting_prompt,
+    strength=strength,
+    sampler=sampler,
+    num_steps=num_steps,
+    guidance_scale=guidance_scale,
+    negative_prompt=negative_prompt,
+    seed=seed,
+    num_samples=num_samples,
+    controlnet_conditioning_scale=controlnet_scale,
 )
 
 # super resolution fields
@@ -362,4 +388,5 @@ __all__ = [
     "st_fields",
     "sr_fields",
     "inpainting_fields",
+    "cn_inpainting_fields",
 ]

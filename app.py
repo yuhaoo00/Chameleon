@@ -16,12 +16,12 @@ class Txt2Img(IFieldsPlugin):
             **common_styles,
             src=constants.TEXT_TO_IMAGE_ICON,
             tooltip=I18N(
-                zh="生成符合文本描述的图片",
+                zh="文生图",
                 en="Text to Image",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="文本生成图片",
+                    zh="文生图",
                     en="Text to Image",
                 ),
                 numColumns=2,
@@ -31,7 +31,7 @@ class Txt2Img(IFieldsPlugin):
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         def callback(step: int, *args) -> bool:
-            return self.send_progress((step+1) / data.extraData["num_steps"])
+            return self.send_progress(step / data.extraData["num_steps"])
         
         pipe = get_sd_t2i(data.extraData["version"])
         return txt2img(pipe, data, callback)
@@ -44,12 +44,12 @@ class Img2Img(IFieldsPlugin):
             **common_styles,
             src=constants.IMAGE_TO_IMAGE_ICON,
             tooltip=I18N(
-                zh="以当前图片为参考图，生成符合文本描述的图片",
+                zh="图生图",
                 en="Image to Image",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="垫图生成",
+                    zh="图生图",
                     en="Image to Image",
                 ),
                 numColumns=2,
@@ -60,7 +60,7 @@ class Img2Img(IFieldsPlugin):
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         def callback(step: int, *args) -> bool:
-            return self.send_progress((step+1) / data.extraData["num_steps"])
+            return self.send_progress(step / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
         pipe = get_sd_i2i(data.extraData["version"])
@@ -73,13 +73,13 @@ class Inpainting(IFieldsPlugin):
             **common_styles,
             src=constants.SD_INPAINTING_ICON,
             tooltip=I18N(
-                zh="在蒙版区域内填充符合描述的内容",
-                en="Replace the masked area and fill it with the description",
+                zh="局部重绘",
+                en="Inpainting",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="局部替换",
-                    en="Erase & Replace",
+                    zh="局部重绘",
+                    en="Inpainting",
                 ),
                 numColumns=2,
                 definitions=inpainting_fields,
@@ -99,6 +99,41 @@ class Inpainting(IFieldsPlugin):
 
         pipe = get_sd_inpaint(data.extraData["version"])
         return inpaint(pipe, img, mask, data, callback)
+    
+class CNInpainting(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.SD_INPAINTING_ICON,
+            tooltip=I18N(
+                zh="局部替换 (ControlNet)",
+                en="Inpainting (ControlNet)",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="局部替换 (ControlNet)",
+                    en="Inpainting (ControlNet)",
+                ),
+                numColumns=2,
+                definitions=cn_inpainting_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, *args) -> bool:
+            return self.send_progress(step / data.extraData["num_steps"])
+
+        url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
+        mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
+        img = await self.load_image(url_node.src)
+        img = img.convert("RGB")
+        mask = await self.load_image(mask_node.src)
+        mask = transform_mask(mask)
+        img_masked = make_inpaint_condition(img, mask)
+
+        pipe = get_controlnet("v11_sd15_inapint")
+        return cn_inpaint(pipe, img, mask, img_masked, data, callback)
 
 
 class StyleTransfer(IFieldsPlugin):
@@ -108,7 +143,7 @@ class StyleTransfer(IFieldsPlugin):
             **common_styles,
             src=constants.IMAGE_TO_IMAGE_ICON,
             tooltip=I18N(
-                zh="以当前图片为风格参考图，生成符合文本描述的图片",
+                zh="风格迁移",
                 en="Style Transfer"
             ),
             pluginInfo=IFieldsPluginInfo(
@@ -297,6 +332,7 @@ class ImageAndMaskFollowers(IPluginGroup):
                 plugins={
                     "matting": Matting,
                     "inpainting": Inpainting,
+                    "cninpainting": CNInpainting,
                 },
             ),
         )

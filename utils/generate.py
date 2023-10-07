@@ -70,6 +70,32 @@ def inpaint(pipe, img, mask, data, step_callback):
     torch.cuda.empty_cache()
     return images
 
+def cn_inpaint(pipe, img, mask, img_masked, data, step_callback):
+    if data.extraData["seed"] != -1:
+        generator=torch.Generator(device="cuda").manual_seed(data.extraData["seed"])
+    else:
+        generator=torch.Generator(device="cuda")
+        generator.seed()
+    orig_sampler = pipe.scheduler
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
+    images = pipe(prompt=data.extraData["text"],
+                  image=img,
+                  mask_image=mask,
+                  control_image=img_masked,
+                  height=data.extraData["h"],
+                  width=data.extraData["w"],
+                  negative_prompt=data.extraData["negative_prompt"],
+                  num_inference_steps=data.extraData["num_steps"],
+                  guidance_scale=data.extraData["guidance_scale"], 
+                  generator=generator,
+                  strength=data.extraData["strength"],
+                  num_images_per_prompt=data.extraData["num_samples"],
+                  controlnet_conditioning_scale= data.extraData["controlnet_conditioning_scale"],
+                  callback=step_callback).images
+    pipe.scheduler = orig_sampler
+    torch.cuda.empty_cache()
+    return images
+
 
 def style_transfer(model, img, data, step_callback):
     if data.extraData["seed"] != -1:
