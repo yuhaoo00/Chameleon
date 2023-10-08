@@ -15,8 +15,8 @@ common_group_styles = dict(w=230, h=110)
 # common diffusion fields
 w_field = INumberField(
     default=512,
-    min=64,
-    max=1024,
+    min=512,
+    max=1280,
     step=64,
     isInt=True,
     label=I18N(
@@ -194,20 +194,7 @@ txt2img_fields = OrderedDict(
     highres_fidelity=highres_fidelity,
     num_samples=num_samples,
 )
-txt2img_text_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    negative_prompt=negative_prompt,
-    version=version_field,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    #use_circular=use_circular,
-    seed=seed,
-    use_highres=use_highres,
-    #lora=lora_field,
-    highres_fidelity=highres_fidelity,
-)
+
 # img2img fields
 img2img_prompt = text.copy()
 img2img_prompt.numRows = 3
@@ -287,8 +274,8 @@ inpainting_fields = OrderedDict(
         default=False,
         label=I18N(zh="聚焦模式", en="Focus Mode"),
         tooltip=I18N(
-            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素，此时生成的效果通常会富有更多的细节",
-            en="When enabled, the model will only focus on the masked region and some surrounding pixels, which usually results in more detailed images",
+            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素",
+            en="When enabled, the model will only focus on the masked region and some surrounding pixels.",
         ),
     ),
 )
@@ -330,6 +317,14 @@ cn_inpainting_fields = OrderedDict(
     seed=seed,
     num_samples=num_samples,
     controlnet_conditioning_scale=controlnet_scale,
+    focus_mode=IBooleanField(
+        default=False,
+        label=I18N(zh="聚焦模式", en="Focus Mode"),
+        tooltip=I18N(
+            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素",
+            en="When enabled, the model will only focus on the masked region and some surrounding pixels.",
+        ),
+    ),
 )
 
 # super resolution fields
@@ -359,7 +354,6 @@ __all__ = [
     "common_group_styles",
     "version_field",
     "txt2img_fields",
-    "txt2img_text_fields",
     "img2img_fields",
     "st_fields",
     "sr_fields",

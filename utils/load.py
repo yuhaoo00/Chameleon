@@ -13,7 +13,7 @@ sd_repos = {
     "SDXL v1.0": main_dir+"stabilityai--stable-diffusion-xl-base-1.0",
 }
 
-@cache_resource
+#@cache_resource
 def get_sd_t2i(tag):
     torch.cuda.empty_cache()
     repo = sd_repos[tag]

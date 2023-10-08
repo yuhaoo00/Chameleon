@@ -63,6 +63,8 @@ class Img2Img(IFieldsPlugin):
             return self.send_progress(step / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
         pipe = get_sd_i2i(data.extraData["version"])
         return img2img(pipe, img, data, callback)
     
@@ -92,6 +94,8 @@ class Tile(IFieldsPlugin):
             return self.send_progress(step / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
         pipe = get_controlnet("v11_sd15_tile")
         return cn_tile(pipe, img, data, callback)
     
@@ -122,9 +126,8 @@ class Inpainting(IFieldsPlugin):
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
-        img = img.convert("RGB")
+        img = img_transform(img, url_node)
         mask = await self.load_image(mask_node.src)
-        mask = transform_mask(mask)
 
         pipe = get_sd_inpaint(data.extraData["version"])
         return inpaint(pipe, img, mask, data, callback)
@@ -156,13 +159,11 @@ class CNInpainting(IFieldsPlugin):
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
-        img = img.convert("RGB")
+        img = img_transform(img, url_node)
         mask = await self.load_image(mask_node.src)
-        mask = transform_mask(mask)
-        img_masked = make_inpaint_condition(img, mask)
 
         pipe = get_controlnet("v11_sd15_inapint")
-        return cn_inpaint(pipe, img, mask, img_masked, data, callback)
+        return cn_inpaint(pipe, img, mask, data, callback)
 
 
 class StyleTransfer(IFieldsPlugin):
@@ -191,6 +192,8 @@ class StyleTransfer(IFieldsPlugin):
             return self.send_progress((step+1) / data.extraData["num_steps"])
         
         img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
         pipe = get_ipadapter(data.extraData["version"])
         return style_transfer(pipe, img, data, callback)
 
@@ -221,7 +224,7 @@ class Matting(IFieldsPlugin):
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
-        img = img.convert("RGB")
+        img = img_transform(img, url_node)
         mask = await self.load_image(mask_node.src)
         mask = mask.convert("L")
         box = mask_to_box(mask)
@@ -274,6 +277,47 @@ class EasyFusing(IFieldsPlugin):
             img1 = await self.load_image(data1.meta['data']['url'])
 
         return easy_fusing(data0, data1, img0, img1)[0]
+    
+class EdgeFusing(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.SOD_ICON,
+            tooltip=I18N(
+                zh="边缘融合",
+                en="Edge Fusing",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="边缘融合",
+                    en="Edge Fusing",
+                ),
+                numColumns=2,
+                definitions=inpainting_fields,
+                #exportFullImages=True,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, *args) -> bool:
+            return self.send_progress(step / data.extraData["num_steps"])
+        url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
+        data0 = url_nodes[0]
+        data1 = url_nodes[1]
+        if 'response' in data0.meta['data']: 
+            img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
+        else:
+            img0 = await self.load_image(data0.meta['data']['url'])
+        if 'response' in data1.meta['data']: 
+            img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
+        else:
+            img1 = await self.load_image(data1.meta['data']['url'])
+
+        pre, mask = easy_fusing(data0, data1, img0, img1)
+
+        pipe = get_sd_inpaint(data.extraData["version"])
+        return easy_inpaint(pipe, pre, mask, data, callback)
 
 
 # groups
@@ -394,6 +438,7 @@ class ImagesFollowers(IPluginGroup):
                 ),
                 plugins={
                     "easyfusing": EasyFusing,
+                    "edgefusing": EdgeFusing,
                 },
             ),
         )

@@ -3,9 +3,10 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 from PIL import Image
+from cftool.cv import ImageBox
 
-def transform_mask(mask):
-    mask = mask.getchannel("A").convert("RGB")
+def png_to_mask(mask):
+    mask = mask.getchannel("A")
     mask = np.array(mask)
     mask[mask >0] = 255
     mask = Image.fromarray(mask)
@@ -36,6 +37,68 @@ def mask_to_box(mask):
         y1 -= 1
     return np.array([x0, y0, x1, y1])
 
+def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int) -> ImageBox:
+    l, t, r, b = lt_rb.tuple
+    l = max(0, l - paddingx)
+    t = max(0, t - paddingy)
+    r = min(w, r + paddingx)
+    b = min(h, b + paddingy)
+    cropped_h, cropped_w = b - t, r - l
+    # adjust lt_rb to make the cropped aspect ratio equals to the original one
+    if cropped_h / cropped_w > h / w:
+        dw = (int(cropped_h * w / h) - cropped_w) // 2
+        dh = 0
+    else:
+        dw = 0
+        dh = (int(cropped_w * h / w) - cropped_h) // 2
+    if dw > 0:
+        if l < dw:
+            l = 0
+            r = min(w, cropped_w + dw * 2)
+        elif r + dw > w:
+            r = w
+            l = max(0, w - cropped_w - dw * 2)
+        else:
+            l -= dw
+            r += dw
+    if dh > 0:
+        if t < dh:
+            t = 0
+            b = min(h, cropped_h + dh * 2)
+        elif b + dh > h:
+            b = h
+            t = max(0, h - cropped_h - dh * 2)
+        else:
+            t -= dh
+            b += dh
+    return ImageBox(l, t, r, b)
+
+def crop_masked_area(image, mask, padding_scale=0.1):
+    """
+    image: PIL.Image "RGB", uint8
+    mask: PIL.Image "L", uint8
+    """
+    w, h = image.size
+    lt_rb = ImageBox.from_mask(np.array(mask), 0)
+    lt_rb = adjust_lt_rb(lt_rb, w, h, int(padding_scale*w), int(padding_scale*h))
+
+    cropped_image = image.crop(lt_rb.tuple).resize((w,h))
+    cropped_mask = mask.crop(lt_rb.tuple).resize((w,h))
+    return cropped_image, cropped_mask, lt_rb
+
+
+def recover_cropped_image(gen_images, orig_image, lt_rb):
+    new = []
+    l, t, r, b = lt_rb.tuple
+    bw, bh = r-l, b-t
+    for img in gen_images:
+        img = img.resize((bw, bh))
+        canvas = orig_image.copy()
+        canvas.paste(img, (l,t))
+        new.append(canvas)
+    return new
+
+
 def make_inpaint_condition(image, image_mask):
     image = np.array(image.convert("RGB")).astype(np.float32) / 255.0
     image_mask = np.array(image_mask.convert("L")).astype(np.float32) / 255.0
@@ -63,28 +126,7 @@ def ExpandEdge(mask, strength=1):
     res = res.cpu().numpy().reshape(h, w)
     return res
 
-def easy_fusing(data0, data1, img0, img1):
-    img0 = img0.convert("RGBA")
-    img1 = img1.convert("RGBA")
-    if data0.z > data1.z:
-        data0, data1 = data1, data0
-        img0, img1 = img1, img0
-
-    theta0 = get_angle(data0.transform.a, data0.transform.c, data0.w, data0.h)
-    theta1 = get_angle(data1.transform.a, data1.transform.c, data1.w, data1.h)
-
-    img0 = img0.resize(size=[int(data0.w), int(data0.h)])
-    img1 = img1.resize(size=[int(data1.w), int(data1.h)]).rotate(np.degrees(theta1), expand=True)
-    
-    new = Image.new("RGBA", [int(max(data1.w, data0.x-data1.x+data0.w)), int(max(data1.h, data0.y-data1.y+data0.h))], color=(0,0,0,0))
-    new.paste(img0, (int(data0.x-data1.x), int(data0.y-data1.y)), mask=img0.getchannel("A"))
-    new = new.rotate(np.degrees(theta0), center=[int(data0.x-data1.x), int(data0.y-data1.y)])
-
-    img1.paste(new, (0,0), mask=new.getchannel("A"))
-
-    mask = np.array(new.getchannel("A"))
-    mask_edge = ExpandEdge(mask, 10)
-    mask_edge = Image.fromarray(mask_edge[:int(data1.h),:int(data1.w)])
-    return [img1, mask_edge]
-
-
+def img_transform(img, data):
+    theta = get_angle(data.transform.a, data.transform.c, data.w, data.h)
+    img = img.resize(size=[int(data.w), int(data.h)]).rotate(np.degrees(theta), expand=True)
+    return img
