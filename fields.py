@@ -5,10 +5,10 @@ from collections import OrderedDict
 
 # common styles
 common_styles = dict(
-    w=0.75,
-    h=0.4,
-    maxW=800,
-    minH=520,
+    w=0.4,
+    h=0.75,
+    maxW=520,
+    minH=720,
     useModal=True,
 )
 common_group_styles = dict(w=230, h=110)
@@ -58,8 +58,8 @@ text = ITextField(
     ),
 )
 version_field = ISelectField(
-    default="SDXL v1.0",
-    options=["SDXL v1.0", "SD v2.1", "SD v1.5"],
+    default="SDXL",
+    options=["SDXL", "SDv2", "SDv1"],
     label=I18N(
         zh="模型", 
         en="Model"
@@ -172,9 +172,38 @@ strength = INumberField(
     max=1.0,
     step=0.02,
     label=I18N(
-        zh="初始加噪强度",
-        en="Initial Noise Strength",
+        zh="图生图强度",
+        en="Img2Img Strength",
     ),
+)
+# Canny Annotator
+low_threshold = INumberField(
+    default=100,
+    min=0,
+    max=255,
+    step=5,
+    isInt=True,
+    label=I18N(
+        zh="最小阈值",
+        en="low threshold",
+    ),
+)
+
+high_threshold = INumberField(
+    default=200,
+    min=0,
+    max=255,
+    step=5,
+    isInt=True,
+    label=I18N(
+        zh="最大阈值",
+        en="high threshold",
+    ),
+)
+
+canny_fields = OrderedDict(
+    low_threshold=low_threshold,
+    high_threshold=high_threshold,
 )
 
 # txt2img
@@ -233,8 +262,8 @@ st_fields = OrderedDict(
     text=st_prompt,
     negative_prompt=negative_prompt,
     version=ISelectField(
-        default="SDXL v1.0",
-        options=["SDXL v1.0", "SD v1.5"],
+        default="SDXL",
+        options=["SDXL", "SDv1"],
         label=I18N(
             zh="模型", 
             en="Model"
@@ -255,8 +284,8 @@ inpainting_fields = OrderedDict(
     w=w_field,
     h=h_field,
     version=ISelectField(
-        default="SDXL v1.0",
-        options=["SDXL v1.0", "SDXL (ft)", "SD v2.1", "SD v2(ft)"],
+        default="SDXL",
+        options=["SDXL", "SDXL (ft)", "SDv2", "SDv2 (ft)", "SDv1", "SDv1 (ft)"],
         label=I18N(
             zh="模型", 
             en="Model"
@@ -327,6 +356,68 @@ cn_inpainting_fields = OrderedDict(
     ),
 )
 
+# Smart Fusing
+box_padding = INumberField(
+    default=0.1,
+    min=0.0,
+    max=0.5,
+    step=0.02,
+    label=I18N(
+        zh="聚焦范围",
+        en="Box Padding Scale",
+    ),
+)
+mask_expand = INumberField(
+    default=10,
+    min=0,
+    max=50,
+    step=1,
+    isInt=True,
+    label=I18N(
+        zh="遮罩外扩",
+        en="Mask Expanding Scale",
+    ),
+)
+smart_fusing_fields = OrderedDict(
+    w=w_field,
+    h=h_field,
+    text=inpainting_prompt,
+    negative_prompt=negative_prompt,
+    version=ISelectField(
+        default="SDXL",
+        options=["SDXL", "SDXL (ft)", "SDv2", "SDv2 (ft)", "SDv1", "SDv1 (ft)"],
+        label=I18N(
+            zh="Inpaint模型", 
+            en="Inpaint Model"
+        ),
+    ),
+    cn_type=ISelectField(
+        default="canny",
+        options=["canny", "soft edge", "zoe depth"],
+        label=I18N(
+            zh="ControlNet模型", 
+            en="ControlNet Model"
+        ),
+    ),
+    seed=seed,
+    sampler=sampler,
+    num_steps=num_steps,
+    num_samples=num_samples,
+    guidance_scale=guidance_scale,
+    strength=strength,
+    controlnet_conditioning_scale=controlnet_scale,
+    guess_mode=IBooleanField(
+        default=False,
+        label=I18N(zh="推测模式", en="Guess Mode"),
+        tooltip=I18N(
+            zh="即使删除所有提示，ControlNet编码器也会尝试识别输入图像的内容",
+            en="The ControlNet encoder tries to recognize the content of the input image even if you remove all prompts.",
+        ),
+    ),
+    box_padding=box_padding,
+    mask_expand=mask_expand,
+)
+
 # super resolution fields
 sr_w_field = w_field.copy()
 sr_w_field.default = 2048
@@ -353,11 +444,13 @@ __all__ = [
     "common_styles",
     "common_group_styles",
     "version_field",
+    "canny_fields",
     "txt2img_fields",
     "img2img_fields",
     "st_fields",
     "sr_fields",
     "inpainting_fields",
     "cn_inpainting_fields",
+    "smart_fusing_fields",
     "tile_fields",
 ]

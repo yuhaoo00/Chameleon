@@ -1,4 +1,8 @@
+import sys
+sys.path.append("/mnt/Data/CodeML/SD/Chameleon")
+
 import numpy as np
+import cv2
 from PIL import Image
 from typing import List
 from cfdraw import *
@@ -6,14 +10,104 @@ from utils.generate import *
 from utils.load import *
 from utils.prepocess import *
 from fields import *
-
+from extensions.annotators.hed import HEDdetector
+from extensions.annotators.zoe import ZoeDetector
+from extensions.annotators.canny import CannyDetector
 # plugins
+
+class Canny(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=480,
+            h=250,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="获取Canny图",
+                en="Get Canny",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取Canny图",
+                    en="Get Canny",
+                ),
+                definitions=canny_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData).convert("RGB")
+
+        model = CannyDetector()
+        res = model(img, data.extraData["low_threshold"], data.extraData["high_threshold"])
+        return [res]
+
+class Zoe(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="获取Zoe图",
+                en="Get Zoe",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取Zoe图",
+                    en="Get Zoe",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData).convert("RGB")
+
+        model = ZoeDetector()
+        res = model(img)
+        return [res]
+
+class Hed(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="获取HED图",
+                en="Get HED",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取HED图",
+                    en="Get HED",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData).convert("RGB")
+
+        model = HEDdetector()
+        res = model(img)
+        return [res]
 
 class Txt2Img(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
-            **common_styles,
+            w=0.75,
+            h=0.4,
+            maxW=800,
+            minH=520,
+            useModal=True,
             src=constants.TEXT_TO_IMAGE_ICON,
             tooltip=I18N(
                 zh="文生图",
@@ -52,9 +146,7 @@ class Img2Img(IFieldsPlugin):
                     zh="图生图",
                     en="Image to Image",
                 ),
-                numColumns=2,
                 definitions=img2img_fields,
-                #exportFullImages=True,
             ),
         )
 
@@ -83,9 +175,7 @@ class Tile(IFieldsPlugin):
                     zh="重绘细节",
                     en="Repaint Details (Tile)",
                 ),
-                numColumns=2,
                 definitions=tile_fields,
-                #exportFullImages=True,
             ),
         )
 
@@ -114,7 +204,6 @@ class Inpainting(IFieldsPlugin):
                     zh="局部重绘",
                     en="Inpainting",
                 ),
-                numColumns=2,
                 definitions=inpainting_fields,
             ),
         )
@@ -147,7 +236,6 @@ class CNInpainting(IFieldsPlugin):
                     zh="局部替换 (ControlNet)",
                     en="Inpainting (ControlNet)",
                 ),
-                numColumns=2,
                 definitions=cn_inpainting_fields,
             ),
         )
@@ -181,9 +269,7 @@ class StyleTransfer(IFieldsPlugin):
                     zh="风格迁移",
                     en="Style Transfer",
                 ),
-                numColumns=2,
                 definitions=st_fields,
-                #exportFullImages=True,
             ),
         )
 
@@ -215,7 +301,6 @@ class Matting(IFieldsPlugin):
                     en="Image Matting",
                 ),
                 definitions={},
-                #exportFullImages=True,
             ),
         )
 
@@ -224,7 +309,7 @@ class Matting(IFieldsPlugin):
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
-        img = img_transform(img, url_node)
+        img = img_transform(img, url_node).convert("RGB")
         mask = await self.load_image(mask_node.src)
         mask = mask.convert("L")
         box = mask_to_box(mask)
@@ -259,7 +344,6 @@ class EasyFusing(IFieldsPlugin):
                     en="Easy Fusing",
                 ),
                 definitions={},
-                #exportFullImages=True,
             ),
         )
 
@@ -293,9 +377,7 @@ class EdgeFusing(IFieldsPlugin):
                     zh="边缘融合",
                     en="Edge Fusing",
                 ),
-                numColumns=2,
                 definitions=inpainting_fields,
-                #exportFullImages=True,
             ),
         )
 
@@ -314,10 +396,45 @@ class EdgeFusing(IFieldsPlugin):
         else:
             img1 = await self.load_image(data1.meta['data']['url'])
 
-        pre, mask = easy_fusing(data0, data1, img0, img1)
-
         pipe = get_sd_inpaint(data.extraData["version"])
-        return easy_inpaint(pipe, pre, mask, data, callback)
+        return edge_fusing(pipe, data, data0, data1, img0, img1, callback)
+    
+class SmartFusing(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            **common_styles,
+            src=constants.SOD_ICON,
+            tooltip=I18N(
+                zh="智能融合",
+                en="Smart Fusing",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="智能融合",
+                    en="Smart Fusing",
+                ),
+                definitions=smart_fusing_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        def callback(step: int, *args) -> bool:
+            return self.send_progress(step / data.extraData["num_steps"])
+        url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
+        data0 = url_nodes[0]
+        data1 = url_nodes[1]
+        if 'response' in data0.meta['data']: 
+            img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
+        else:
+            img0 = await self.load_image(data0.meta['data']['url'])
+        if 'response' in data1.meta['data']: 
+            img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
+        else:
+            img1 = await self.load_image(data1.meta['data']['url'])
+
+        pipe = get_style_inpaint(data.extraData["version"], data.extraData["cn_type"])
+        return smart_fusing(pipe, data, data0, data1, img0, img1, callback)
 
 
 # groups
@@ -355,25 +472,28 @@ class ImageFollowers(IPluginGroup):
             w=common_group_styles["w"],
             h=164,
             tooltip=I18N(
-                zh="一组将 AI 技术应用于当前图片的插件",
-                en="A set of plugins that apply AI techniques to the given image",
+                zh="AIGC工具箱",
+                en="AIGC Toolbox",
             ),
             nodeConstraint=NodeConstraints.IMAGE,
             pivot=PivotType.RT,
             follow=True,
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
-                    zh="图片工具箱",
-                    en="Image Toolbox",
+                    zh="AIGC工具箱",
+                    en="AIGC Toolbox",
                 ),
                 header=I18N(
-                    zh="图片工具箱",
-                    en="Image Toolbox",
+                    zh="AIGC工具箱",
+                    en="AIGC Toolbox",
                 ),
                 plugins={
                     "img2img": Img2Img,
                     "styletransfer": StyleTransfer,
                     "tile": Tile,
+                    "canny": Canny,
+                    "hed": Hed,
+                    "zoe": Zoe,
                 },
             ),
         )
@@ -439,6 +559,7 @@ class ImagesFollowers(IPluginGroup):
                 plugins={
                     "easyfusing": EasyFusing,
                     "edgefusing": EdgeFusing,
+                    "smartfusing": SmartFusing,
                 },
             ),
         )

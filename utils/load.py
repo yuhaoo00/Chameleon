@@ -4,13 +4,14 @@ from extensions.IPAdapter.ip_adapter import IPAdapterXL, IPAdapter
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoPipelineForInpainting
 from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
 from diffusers import DPMSolverMultistepScheduler, 	EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler
+from pipelines import StyleControlInpaint_sd15, StyleControlInpaint_sdxl
 
 main_dir = "/mnt/Data/CodeML/SD/CKPTS/"
 
 sd_repos = {
-    "SD v1.5": main_dir+"runwayml--stable-diffusion-v1-5",
-    "SD v2.1": main_dir+"stabilityai--stable-diffusion-2-1",
-    "SDXL v1.0": main_dir+"stabilityai--stable-diffusion-xl-base-1.0",
+    "SDv1": main_dir+"runwayml--stable-diffusion-v1-5",
+    "SDv2": main_dir+"stabilityai--stable-diffusion-2-1",
+    "SDXL": main_dir+"stabilityai--stable-diffusion-xl-base-1.0",
 }
 
 #@cache_resource
@@ -28,8 +29,11 @@ def get_sd_i2i(tag):
 
 def get_sd_inpaint(tag):
     torch.cuda.empty_cache()
-    if tag == "SD v2(ft)":
+    if tag == "SDv2 (ft)":
         pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"stabilityai--stable-diffusion-2-inpainting",
+                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+    elif tag == "SDv1 (ft)":
+        pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"runwayml--stable-diffusion-inpainting",
                                                          torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
     elif tag == "SDXL (ft)":
         pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"diffusers--stable-diffusion-xl-1.0-inpainting-0.1",
@@ -39,17 +43,51 @@ def get_sd_inpaint(tag):
         pipe = AutoPipelineForInpainting.from_pipe(t2i).to("cuda")
     return pipe
 
+
+def get_style_inpaint(tag, cn_tag):
+    torch.cuda.empty_cache()
+    inpaint_pipe = get_sd_inpaint(tag)
+    if 'v1' in tag:
+        if cn_tag == 'canny':
+            cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_canny",
+                                                 torch_dtype=torch.float16,
+                                                 use_safetensors=True,
+                                                 variant="fp16").to("cuda")
+        elif cn_tag == 'soft edge':
+            cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_softedge",
+                                                 torch_dtype=torch.float16,
+                                                 use_safetensors=True,
+                                                 variant="fp16").to("cuda")
+        elif cn_tag == 'zoe depth':
+            cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11f1p_sd15_depth",
+                                                 torch_dtype=torch.float16,
+                                                 use_safetensors=True,
+                                                 variant="fp16").to("cuda")
+        pipe = StyleControlInpaint_sd15(controlnet=cn, **inpaint_pipe.components)
+    elif 'XL' in tag:
+        if cn_tag == 'canny':
+            cn = ControlNetModel.from_pretrained(main_dir+"diffusers--controlnet-canny-sdxl-1.0",
+                                                 torch_dtype=torch.float16,
+                                                 use_safetensors=True,
+                                                 variant="fp16").to("cuda")
+        elif cn_tag == 'zoe depth':
+            cn = ControlNetModel.from_pretrained(main_dir+"diffusers--controlnet-zoe-depth-sdxl-1.0",
+                                                 torch_dtype=torch.float16,
+                                                 use_safetensors=True).to("cuda")
+        pipe = StyleControlInpaint_sdxl(controlnet=cn, **inpaint_pipe.components)
+    return pipe
+
 def get_controlnet(tag):
     torch.cuda.empty_cache()
     if tag == "v11_sd15_inapint":
-        t2i = get_sd_t2i("SD v1.5")
+        t2i = get_sd_t2i("SDv1")
         cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_inpaint",
                                              torch_dtype=torch.float16,
                                              use_safetensors=True,
                                              variant="fp16").to("cuda")
         pipe = StableDiffusionControlNetInpaintPipeline(controlnet=cn, **t2i.components)
     elif tag == "v11_sd15_tile":
-        t2i = get_sd_t2i("SD v1.5")
+        t2i = get_sd_t2i("SDv1")
         cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11f1e_sd15_tile",
                                              torch_dtype=torch.float16
                                              ).to("cuda")
@@ -59,12 +97,12 @@ def get_controlnet(tag):
 def get_ipadapter(tag):
     torch.cuda.empty_cache()
     t2i = get_sd_t2i(tag)
-    if tag == "SDXL v1.0":
+    if tag == "SDXL":
         ip_model = IPAdapterXL(t2i, 
                             main_dir+"IP-Adapter/sdxl_models/image_encoder", 
                             main_dir+"IP-Adapter/sdxl_models/ip-adapter_sdxl.bin",
                             "cuda")
-    elif tag == "SD v1.5":
+    elif tag == "SDv1":
         ip_model = IPAdapter(t2i, 
                             main_dir+"IP-Adapter/models/image_encoder", 
                             main_dir+"IP-Adapter/models/ip-adapter_sd15.bin",

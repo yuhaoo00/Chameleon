@@ -37,20 +37,20 @@ def mask_to_box(mask):
         y1 -= 1
     return np.array([x0, y0, x1, y1])
 
-def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int) -> ImageBox:
+def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int, tw: int, th: int) -> ImageBox:
     l, t, r, b = lt_rb.tuple
     l = max(0, l - paddingx)
     t = max(0, t - paddingy)
     r = min(w, r + paddingx)
     b = min(h, b + paddingy)
     cropped_h, cropped_w = b - t, r - l
-    # adjust lt_rb to make the cropped aspect ratio equals to the original one
-    if cropped_h / cropped_w > h / w:
-        dw = (int(cropped_h * w / h) - cropped_w) // 2
+    # adjust lt_rb to make the cropped aspect ratio equals to the th/tw
+    if cropped_h / cropped_w > th / tw:
+        dw = (int(cropped_h * tw / th) - cropped_w) // 2
         dh = 0
     else:
         dw = 0
-        dh = (int(cropped_w * h / w) - cropped_h) // 2
+        dh = (int(cropped_w * th / tw) - cropped_h) // 2
     if dw > 0:
         if l < dw:
             l = 0
@@ -73,17 +73,23 @@ def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int) 
             b += dh
     return ImageBox(l, t, r, b)
 
-def crop_masked_area(image, mask, padding_scale=0.1):
+def crop_masked_area(image, mask, tw, th, padding_scale=0.1):
     """
     image: PIL.Image "RGB", uint8
     mask: PIL.Image "L", uint8
     """
-    w, h = image.size
+    w, h = mask.size
     lt_rb = ImageBox.from_mask(np.array(mask), 0)
-    lt_rb = adjust_lt_rb(lt_rb, w, h, int(padding_scale*w), int(padding_scale*h))
+    lt_rb = adjust_lt_rb(lt_rb, w, h, int(padding_scale*w), int(padding_scale*h), tw, th)
 
-    cropped_image = image.crop(lt_rb.tuple).resize((w,h))
-    cropped_mask = mask.crop(lt_rb.tuple).resize((w,h))
+    
+    cropped_mask = mask.crop(lt_rb.tuple).resize((tw,th))
+    if isinstance(image, list): 
+        cropped_image = []
+        for img in image:
+            cropped_image.append(img.crop(lt_rb.tuple).resize((tw,th)))
+    else:
+        cropped_image = image.crop(lt_rb.tuple).resize((tw,th))
     return cropped_image, cropped_mask, lt_rb
 
 
@@ -116,7 +122,7 @@ def get_angle(a,c,w,h):
     return theta
 
 def ExpandEdge(mask, strength=1):
-    mask = mask/255.
+    mask = np.array(mask)/255.
     h, w = mask.shape
     kernel_size = 3+2*strength
     mask = torch.from_numpy(mask).to("cuda").float().unsqueeze(0).unsqueeze(0)
@@ -124,9 +130,27 @@ def ExpandEdge(mask, strength=1):
     x = F.conv2d(mask, kernel, padding=kernel_size//2)
     res = ((x>0) & (x<(kernel_size**2)))
     res = res.cpu().numpy().reshape(h, w)
+    res = Image.fromarray(res)
+    return res
+
+def ExpandMask(mask, strength=1):
+    mask = np.array(mask)/255.
+    h, w = mask.shape
+    kernel_size = 3+2*strength
+    mask = torch.from_numpy(mask).to("cuda").float().unsqueeze(0).unsqueeze(0)
+    kernel = torch.ones((1,1,kernel_size,kernel_size), device="cuda")
+    x = F.conv2d(mask, kernel, padding=kernel_size//2)
+    res = x>0
+    res = res.cpu().numpy().reshape(h, w)
+    res = Image.fromarray(res)
     return res
 
 def img_transform(img, data):
+    if img.mode == "RGBA":
+        alpha = img.getchannel("A")
+        alpha = np.array(alpha, dtype=np.float32)/255.
+        img_data = np.array(img, dtype=np.float32) * alpha[:,:,None]
+        img = Image.fromarray(img_data.astype(np.uint8))
     theta = get_angle(data.transform.a, data.transform.c, data.w, data.h)
     img = img.resize(size=[int(data.w), int(data.h)]).rotate(np.degrees(theta), expand=True)
     return img
