@@ -9,6 +9,7 @@ import torch
 from einops import rearrange
 from .zoedepth.models.zoedepth.zoedepth_v1 import ZoeDepth
 from .zoedepth.utils.config import get_config
+from PIL import Image
 
 class ZoeDetector:
     def __init__(self):
@@ -22,6 +23,7 @@ class ZoeDetector:
         self.model = model
 
     def __call__(self, input_image):
+        input_image = np.asarray(input_image)
         assert input_image.ndim == 3
         image_depth = input_image
         with torch.no_grad():
@@ -39,5 +41,6 @@ class ZoeDetector:
             depth /= vmax - vmin
             depth = 1.0 - depth
             depth_image = (depth * 255.0).clip(0, 255).astype(np.uint8)
+            depth_image = Image.fromarray(depth_image)
 
             return depth_image

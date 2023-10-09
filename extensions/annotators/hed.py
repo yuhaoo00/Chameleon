@@ -12,6 +12,7 @@ import numpy as np
 
 from einops import rearrange
 from .util import safe_step
+from PIL import Image
 
 
 class DoubleConvBlock(torch.nn.Module):
@@ -60,6 +61,7 @@ class HEDdetector:
         self.netNetwork.load_state_dict(torch.load(modelpath))
 
     def __call__(self, input_image, safe=False):
+        input_image = np.asarray(input_image)
         assert input_image.ndim == 3
         H, W, C = input_image.shape
         with torch.no_grad():
@@ -73,4 +75,6 @@ class HEDdetector:
             if safe:
                 edge = safe_step(edge)
             edge = (edge * 255.0).clip(0, 255).astype(np.uint8)
+            edge = Image.fromarray(edge)
+
             return edge
