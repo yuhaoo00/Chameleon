@@ -14,84 +14,95 @@ sd_repos = {
     "SDXL": main_dir+"stabilityai--stable-diffusion-xl-base-1.0",
 }
 
+sam_paths = {
+    "vit_t": main_dir+"mobile_sam.pt",
+    "vit_h": main_dir+"sam_vit_h_4b8939.pth",
+}
+
 #@cache_resource
-def get_sd_t2i(tag):
+def get_sd_t2i(tag, cpu_off=True):
     torch.cuda.empty_cache()
     repo = sd_repos[tag]
-    t2i = AutoPipelineForText2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+    t2i = AutoPipelineForText2Image.from_pretrained(repo, torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
+    if cpu_off:
+        t2i.enable_model_cpu_offload()
     return t2i
 
 def get_sd_i2i(tag):
     torch.cuda.empty_cache()
     t2i = get_sd_t2i(tag)
-    i2i = AutoPipelineForImage2Image.from_pipe(t2i).to("cuda")
+    i2i = AutoPipelineForImage2Image.from_pipe(t2i)
     return i2i
 
-def get_sd_inpaint(tag):
+def get_sd_inpaint(tag, cpu_off=True):
     torch.cuda.empty_cache()
     if tag == "SDv2 (ft)":
         pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"stabilityai--stable-diffusion-2-inpainting",
-                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
     elif tag == "SDv1 (ft)":
         pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"runwayml--stable-diffusion-inpainting",
-                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
     elif tag == "SDXL (ft)":
         pipe = AutoPipelineForInpainting.from_pretrained(main_dir+"diffusers--stable-diffusion-xl-1.0-inpainting-0.1",
-                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to("cuda")
+                                                         torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
     else:
-        t2i = get_sd_t2i(tag)
-        pipe = AutoPipelineForInpainting.from_pipe(t2i).to("cuda")
+        t2i = get_sd_t2i(tag, False)
+        pipe = AutoPipelineForInpainting.from_pipe(t2i)
+    if cpu_off:
+        pipe.enable_model_cpu_offload()
     return pipe
 
 
 def get_style_inpaint(tag, cn_tag):
     torch.cuda.empty_cache()
-    inpaint_pipe = get_sd_inpaint(tag)
+    inpaint_pipe = get_sd_inpaint(tag, False)
     if 'v1' in tag:
         if cn_tag == 'canny':
             cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_canny",
                                                  torch_dtype=torch.float16,
                                                  use_safetensors=True,
-                                                 variant="fp16").to("cuda")
+                                                 variant="fp16")
         elif cn_tag == 'soft edge':
             cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_softedge",
                                                  torch_dtype=torch.float16,
                                                  use_safetensors=True,
-                                                 variant="fp16").to("cuda")
+                                                 variant="fp16")
         elif cn_tag == 'zoe depth':
             cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11f1p_sd15_depth",
                                                  torch_dtype=torch.float16,
                                                  use_safetensors=True,
-                                                 variant="fp16").to("cuda")
+                                                 variant="fp16")
         pipe = StyleControlInpaint_sd15(controlnet=cn, **inpaint_pipe.components)
     elif 'XL' in tag:
         if cn_tag == 'canny':
             cn = ControlNetModel.from_pretrained(main_dir+"diffusers--controlnet-canny-sdxl-1.0",
                                                  torch_dtype=torch.float16,
                                                  use_safetensors=True,
-                                                 variant="fp16").to("cuda")
+                                                 variant="fp16")
         elif cn_tag == 'zoe depth':
             cn = ControlNetModel.from_pretrained(main_dir+"diffusers--controlnet-zoe-depth-sdxl-1.0",
                                                  torch_dtype=torch.float16,
-                                                 use_safetensors=True).to("cuda")
+                                                 use_safetensors=True)
         pipe = StyleControlInpaint_sdxl(controlnet=cn, **inpaint_pipe.components)
+    pipe.enable_model_cpu_offload()
     return pipe
 
 def get_controlnet(tag):
     torch.cuda.empty_cache()
     if tag == "v11_sd15_inapint":
-        t2i = get_sd_t2i("SDv1")
+        t2i = get_sd_t2i("SDv1", False)
         cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11p_sd15_inpaint",
                                              torch_dtype=torch.float16,
                                              use_safetensors=True,
-                                             variant="fp16").to("cuda")
+                                             variant="fp16")
         pipe = StableDiffusionControlNetInpaintPipeline(controlnet=cn, **t2i.components)
     elif tag == "v11_sd15_tile":
-        t2i = get_sd_t2i("SDv1")
+        t2i = get_sd_t2i("SDv1", False)
         cn = ControlNetModel.from_pretrained(main_dir+"lllyasviel--control_v11f1e_sd15_tile",
                                              torch_dtype=torch.float16
-                                             ).to("cuda")
+                                             )
         pipe = StableDiffusionControlNetPipeline(controlnet=cn, **t2i.components)
+    pipe.enable_model_cpu_offload()
     return pipe
 
 def get_ipadapter(tag):
@@ -113,12 +124,10 @@ def get_ipadapter(tag):
     return ip_model
 
 
-@cache_resource
-def get_mSAM():
+def get_mSAM(tag):
     from extensions.MobileSAM import sam_model_registry, SamPredictor
-    model_type = "vit_t"
-    sam_checkpoint = main_dir+"mobile_sam.pt"
-    mobile_sam = sam_model_registry[model_type](checkpoint=sam_checkpoint).cuda()
+    sam_checkpoint = sam_paths[tag]
+    mobile_sam = sam_model_registry[tag](checkpoint=sam_checkpoint).cuda()
     mobile_sam.eval()
     predictor = SamPredictor(mobile_sam)
     return predictor

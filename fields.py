@@ -6,12 +6,12 @@ from collections import OrderedDict
 # common styles
 common_styles = dict(
     w=0.4,
-    h=0.75,
+    h=0.65,
     maxW=520,
     minH=720,
     useModal=True,
 )
-common_group_styles = dict(w=230, h=110)
+common_group_styles = dict(w=180, h=110)
 # common diffusion fields
 w_field = INumberField(
     default=512,
@@ -228,19 +228,17 @@ txt2img_fields = OrderedDict(
 img2img_prompt = text.copy()
 img2img_prompt.numRows = 3
 img2img_fields = OrderedDict(
-    text=img2img_prompt,
-    strength=strength,
     version=version_field,
-    sampler=sampler,
+    text=img2img_prompt,
     negative_prompt=negative_prompt,
+    sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    #use_circular=use_circular,
+    strength=strength,
     seed=seed,
-    use_highres=use_highres,
-    #lora=lora_field,
-    highres_fidelity=highres_fidelity,
     num_samples=num_samples,
+    use_highres=use_highres,
+    highres_fidelity=highres_fidelity,
 )
 
 # styletransfer fields
@@ -257,10 +255,6 @@ scale = INumberField(
 st_prompt = text.copy()
 st_prompt.numRows = 3
 st_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    text=st_prompt,
-    negative_prompt=negative_prompt,
     version=ISelectField(
         default="SDXL",
         options=["SDXL", "SDv1"],
@@ -269,11 +263,15 @@ st_fields = OrderedDict(
             en="Model"
         ),
     ),
+    w=w_field,
+    h=h_field,
+    text=st_prompt,
+    negative_prompt=negative_prompt,
     sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    seed=seed,
     scale=scale,
+    seed=seed,
     num_samples=num_samples,
 )
 
@@ -281,8 +279,6 @@ st_fields = OrderedDict(
 inpainting_prompt = text.copy()
 inpainting_prompt.numRows = 3
 inpainting_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
     version=ISelectField(
         default="SDXL",
         options=["SDXL", "SDXL (ft)", "SDv2", "SDv2 (ft)", "SDv1", "SDv1 (ft)"],
@@ -291,12 +287,14 @@ inpainting_fields = OrderedDict(
             en="Model"
         ),
     ),
+    w=w_field,
+    h=h_field,
     text=inpainting_prompt,
-    strength=strength,
+    negative_prompt=negative_prompt,
     sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    negative_prompt=negative_prompt,
+    strength=strength,
     seed=seed,
     num_samples=num_samples,
     focus_mode=IBooleanField(
@@ -325,27 +323,27 @@ tile_fields = OrderedDict(
     w=w_field,
     h=h_field,
     text=tile_prompt,
-    sampler=sampler,
     negative_prompt=negative_prompt,
+    sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
+    controlnet_conditioning_scale=controlnet_scale,
     seed=seed,
     num_samples=num_samples,
-    controlnet_conditioning_scale=controlnet_scale,
 )
 
 cn_inpainting_fields = OrderedDict(
     w=w_field,
     h=h_field,
     text=inpainting_prompt,
+    negative_prompt=negative_prompt,
     strength=strength,
     sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    negative_prompt=negative_prompt,
+    controlnet_conditioning_scale=controlnet_scale,
     seed=seed,
     num_samples=num_samples,
-    controlnet_conditioning_scale=controlnet_scale,
     focus_mode=IBooleanField(
         default=False,
         label=I18N(zh="聚焦模式", en="Focus Mode"),
@@ -379,10 +377,6 @@ mask_expand = INumberField(
     ),
 )
 smart_fusing_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    text=inpainting_prompt,
-    negative_prompt=negative_prompt,
     version=ISelectField(
         default="SDXL",
         options=["SDXL", "SDXL (ft)", "SDv2", "SDv2 (ft)", "SDv1", "SDv1 (ft)"],
@@ -399,13 +393,17 @@ smart_fusing_fields = OrderedDict(
             en="ControlNet Model"
         ),
     ),
-    seed=seed,
+    w=w_field,
+    h=h_field,
+    text=inpainting_prompt,
+    negative_prompt=negative_prompt,
     sampler=sampler,
     num_steps=num_steps,
-    num_samples=num_samples,
     guidance_scale=guidance_scale,
     strength=strength,
     controlnet_conditioning_scale=controlnet_scale,
+    seed=seed,
+    num_samples=num_samples,
     guess_mode=IBooleanField(
         default=False,
         label=I18N(zh="推测模式", en="Guess Mode"),
@@ -417,6 +415,19 @@ smart_fusing_fields = OrderedDict(
     box_padding=box_padding,
     mask_expand=mask_expand,
 )
+
+# matting
+matting_fields = OrderedDict(
+    version=ISelectField(
+        default="vit_t",
+        options=["vit_t", "vit_h"],
+        label=I18N(
+            zh="模型", 
+            en="Model"
+        ),
+    ),
+)
+
 
 # super resolution fields
 sr_w_field = w_field.copy()
@@ -453,4 +464,5 @@ __all__ = [
     "cn_inpainting_fields",
     "smart_fusing_fields",
     "tile_fields",
+    "matting_fields",
 ]

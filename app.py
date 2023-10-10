@@ -289,7 +289,7 @@ class Matting(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             w=240,
-            h=110,
+            h=180,
             src=constants.SOD_ICON,
             tooltip=I18N(
                 zh="抠图",
@@ -300,7 +300,7 @@ class Matting(IFieldsPlugin):
                     zh="抠图",
                     en="Image Matting",
                 ),
-                definitions={},
+                definitions=matting_fields,
             ),
         )
 
@@ -314,7 +314,7 @@ class Matting(IFieldsPlugin):
         mask = mask.convert("L")
         box = mask_to_box(mask)
         
-        model = get_mSAM()
+        model = get_mSAM(data.extraData["version"])
         model.set_image(np.array(img))
         mask_fined = model.predict(box=box,
                                     #mask_input=mask[None,:,:],
@@ -517,11 +517,11 @@ class ImageAndMaskFollowers(IPluginGroup):
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
                     zh="蒙版工具箱",
-                    en="Image & Mask Toolbox",
+                    en="Mask Toolbox",
                 ),
                 header=I18N(
                     zh="蒙版工具箱",
-                    en="Image & Mask Toolbox",
+                    en="Mask Toolbox",
                 ),
                 plugins={
                     "matting": Matting,
@@ -566,7 +566,7 @@ class ImagesFollowers(IPluginGroup):
 
 # uncomment this line to pre-load the models
 # get_apis()
-register_plugin("static")(StaticPlugins)
+register_plugin("static")(Txt2Img)
 register_plugin("image_followers")(ImageFollowers)
 register_plugin("images_followers")(ImagesFollowers)
 register_plugin("image_and_mask_followers")(ImageAndMaskFollowers)
