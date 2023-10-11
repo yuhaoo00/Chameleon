@@ -296,3 +296,9 @@ def smart_fusing(pipe, data, data0, data1, img0, img1, step_callback):
     images = recover_cropped_image(fused_imgs, orig_fused_img, box)
     torch.cuda.empty_cache()
     return images
+
+def upscale(model, img, data):
+    img = np.array(img)
+    output, _ = model.enhance(img, outscale=data.extraData["upscale"])
+    output = Image.fromarray(output)
+    return output

@@ -5,6 +5,8 @@ from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, Aut
 from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
 from diffusers import DPMSolverMultistepScheduler, 	EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler
 from pipelines import StyleControlInpaint_sd15, StyleControlInpaint_sdxl
+from extensions.realesrgan import RealESRGANer
+from basicsr.archs.rrdbnet_arch import RRDBNet
 
 main_dir = "/mnt/Data/CodeML/SD/CKPTS/"
 
@@ -17,6 +19,11 @@ sd_repos = {
 sam_paths = {
     "vit_t": main_dir+"mobile_sam.pt",
     "vit_h": main_dir+"sam_vit_h_4b8939.pth",
+}
+
+upscaler_paths = {
+    "ESRGAN-general": main_dir+"Real-ESRGAN/RealESRGAN_x4plus.pth",
+    "ESRGAN-anime": main_dir+"Real-ESRGAN/RealESRGAN_x4plus_anime_6B.pth",
 }
 
 #@cache_resource
@@ -146,3 +153,17 @@ def alter_sampler(pipe, sampler_name):
     elif sampler_name == "DPM++ 2M SDE Karras":
         pipe.scheduler = DPMSolverMultistepScheduler(use_karras_sigmas=True, algorithm_type="sde-dpmsolver++").from_config(pipe.scheduler.config)
     return pipe
+
+def get_upscaler(tag):
+    if tag == "ESRGAN-general":
+        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=4)
+    elif tag == "ESRGAN-anime":
+        model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=6, num_grow_ch=32, scale=4)
+
+    upsampler = RealESRGANer(
+        scale=4,
+        model_path=upscaler_paths[tag],
+        dni_weight=None,
+        model=model)
+    
+    return upsampler

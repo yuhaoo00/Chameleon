@@ -15,6 +15,34 @@ from extensions.annotators.zoe import ZoeDetector
 from extensions.annotators.canny import CannyDetector
 # plugins
 
+class Upscale(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=480,
+            h=250,
+            src=constants.IMAGE_TO_IMAGE_ICON,
+            tooltip=I18N(
+                zh="超分辨率",
+                en="Super Resolution",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="超分辨率",
+                    en="Super Resolution",
+                ),
+                definitions=sr_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
+        model = get_upscaler(data.extraData["version"])
+        res = upscale(model, img, data)
+        return [res]
+
 class Canny(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
@@ -512,6 +540,7 @@ class ImageFollowers(IPluginGroup):
                     "canny": Canny,
                     "hed": Hed,
                     "zoe": Zoe,
+                    "upscale": Upscale,
                 },
             ),
         )

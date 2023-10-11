@@ -445,24 +445,28 @@ matting_fields = OrderedDict(
 
 
 # super resolution fields
-sr_w_field = w_field.copy()
-sr_w_field.default = 2048
-sr_w_field.min = 1024
-sr_w_field.max = 3072
-sr_h_field = h_field.copy()
-sr_h_field.default = 2048
-sr_h_field.min = 1024
-sr_h_field.max = 3072
 sr_fields = OrderedDict(
-    model=ISelectField(
-        default="sd2-x4-upscaler",
-        options=["sd2-x4-upscaler", "ESRGAN", "SwinIR"],
+    version=ISelectField(
+        default="ESRGAN-general",
+        options=["ESRGAN-general", "ESRGAN-anime"],
         label=I18N(
             zh="模型", 
             en="Model")
     ),
-    target_w=sr_w_field,
-    target_h=sr_h_field,
+    upscale=INumberField(
+        default=2.0,
+        min=1.1,
+        max=4.0,
+        step=0.1,
+        label=I18N(
+            zh="上采样倍数",
+            en="Upscale by",
+        ),
+        tooltip=I18N(
+            zh="上采样倍数",
+            en="Upscale by",
+        ),
+    )
 )
 
 
