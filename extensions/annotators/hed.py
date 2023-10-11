@@ -61,7 +61,7 @@ class HEDdetector:
         self.netNetwork.load_state_dict(torch.load(modelpath))
 
     def __call__(self, input_image, safe=False):
-        input_image = np.asarray(input_image)
+        input_image = np.asarray(input_image.convert("RGB"))
         assert input_image.ndim == 3
         H, W, C = input_image.shape
         with torch.no_grad():

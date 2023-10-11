@@ -23,9 +23,9 @@ class ZoeDetector:
         self.model = model
 
     def __call__(self, input_image):
-        input_image = np.asarray(input_image)
+        input_image = np.asarray(input_image.convert("RGB"))
         assert input_image.ndim == 3
-        image_depth = input_image
+        image_depth = input_image.copy()
         with torch.no_grad():
             image_depth = torch.from_numpy(image_depth).float().cuda()
             image_depth = image_depth / 255.0

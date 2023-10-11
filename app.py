@@ -65,7 +65,7 @@ class Canny(IFieldsPlugin):
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData).convert("RGB")
+        img = img_transform(img, data.nodeData)
 
         model = CannyDetector()
         res = model(img, data.extraData["low_threshold"], data.extraData["high_threshold"])
@@ -93,7 +93,7 @@ class Zoe(IFieldsPlugin):
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData).convert("RGB")
+        img = img_transform(img, data.nodeData)
 
         model = ZoeDetector()
         res = model(img)
@@ -121,7 +121,7 @@ class Hed(IFieldsPlugin):
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData).convert("RGB")
+        img = img_transform(img, data.nodeData)
 
         model = HEDdetector()
         res = model(img)

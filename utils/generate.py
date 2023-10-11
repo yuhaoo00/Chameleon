@@ -276,8 +276,13 @@ def smart_fusing(pipe, data, data0, data1, img0, img1, step_callback):
     init_fore_img = init_imgs[1]
     init_mask = ExpandMask(init_mask, data.extraData["mask_expand"])
 
-    ann = CannyDetector()
-    init_img_prompt = ann(init_fore_img, 100, 200)
+    if data.extraData["cn_type"] == "canny":
+        ann = CannyDetector()
+    elif data.extraData["cn_type"] == "soft edge":
+        ann = HEDdetector()
+    elif data.extraData["cn_type"] == "zoe depth":
+        ann = ZoeDetector()
+    init_img_prompt = ann(init_fore_img)
     
     fused_imgs = pipe(prompt=data.extraData["text"],
                         image=init_back_img,
