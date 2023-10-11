@@ -147,22 +147,37 @@ use_highres = IBooleanField(
         en="Highres",
     ),
     tooltip=I18N(
-        zh="生成 2 倍宽高的图片",
-        en="Generate images with 2x width & height",
+        zh="高清生成",
+        en="Highres",
     ),
 )
-highres_fidelity = INumberField(
-    default=0.3,
+highres_scale = INumberField(
+    default=2.0,
+    min=1.1,
+    max=4.0,
+    step=0.1,
+    label=I18N(
+        zh="上采样倍数",
+        en="Upscale by",
+    ),
+    tooltip=I18N(
+        zh="上采样倍数",
+        en="Upscale by",
+    ),
+    condition="use_highres",
+)
+highres_strength = INumberField(
+    default=0.5,
     min=0.0,
     max=1.0,
     step=0.05,
     label=I18N(
         zh="相似度",
-        en="Fidelity",
+        en="strength",
     ),
     tooltip=I18N(
-        zh="高清生成的图片与直出图片的相似度",
-        en="How similar the (2x) generated image should be to the (original) generated image",
+        zh="相似度",
+        en="strength",
     ),
     condition="use_highres",
 )
@@ -216,12 +231,11 @@ txt2img_fields = OrderedDict(
     negative_prompt=negative_prompt,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    #use_circular=use_circular,
     seed=seed,
-    use_highres=use_highres,
-    #lora=lora_field,
-    highres_fidelity=highres_fidelity,
     num_samples=num_samples,
+    use_highres=use_highres,
+    highres_scale=highres_scale,
+    highres_strength=highres_strength,
 )
 
 # img2img fields
@@ -238,7 +252,8 @@ img2img_fields = OrderedDict(
     seed=seed,
     num_samples=num_samples,
     use_highres=use_highres,
-    highres_fidelity=highres_fidelity,
+    highres_scale=highres_scale,
+    highres_strength=highres_strength,
 )
 
 # styletransfer fields

@@ -15,56 +15,105 @@ def get_generator(seed):
     return generator
 
 
-def txt2img(pipe, data, step_callback):
-    generator = get_generator(data.extraData["seed"])
-    orig_sampler = pipe.scheduler
+def txt2img(pipe, data, hrfix_steps_ratio, step_callback, step_callback2):
     pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
+    #orig_sampler = pipe.scheduler
+    #pipe.scheduler = orig_sampler
 
-    images = pipe(prompt=data.extraData["text"],
-                  negative_prompt=data.extraData["negative_prompt"],
-                  height=data.extraData["h"],
-                  width=data.extraData["w"],
-                  num_inference_steps=data.extraData["num_steps"],
-                  guidance_scale=data.extraData["guidance_scale"], 
-                  generator=generator,
-                  num_images_per_prompt=data.extraData["num_samples"],
-                  callback=step_callback).images
-    
-    pipe.scheduler = orig_sampler
+    if not data.extraData["use_highres"]:
+        images = pipe(
+                    prompt=data.extraData["text"],
+                    negative_prompt=data.extraData["negative_prompt"],
+                    height=data.extraData["h"],
+                    width=data.extraData["w"],
+                    num_inference_steps=data.extraData["num_steps"],
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback).images
+    else:
+        lr_latents = pipe(
+                    prompt=data.extraData["text"],
+                    negative_prompt=data.extraData["negative_prompt"],
+                    height=data.extraData["h"],
+                    width=data.extraData["w"],
+                    num_inference_steps=data.extraData["num_steps"],
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback,
+                    output_type="latent").images
+        i2i = AutoPipelineForImage2Image.from_pipe(pipe)
+
+        hr_latents = F.interpolate(lr_latents, scale_factor=data.extraData["highres_scale"], mode="nearest")
+        images = i2i(
+                    prompt=data.extraData["text"], 
+                    image=hr_latents, 
+                    negative_prompt=data.extraData["negative_prompt"],
+                    num_inference_steps=int(data.extraData["num_steps"]*hrfix_steps_ratio),
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    strength=data.extraData["highres_strength"],
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback2).images
+        
     torch.cuda.empty_cache()
     return images
 
-def img2img(pipe, img, data, step_callback):
-    generator = get_generator(data.extraData["seed"])
-    orig_sampler = pipe.scheduler
+def img2img(pipe, img, data, hrfix_steps_ratio, step_callback, step_callback2):
     pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
 
-    images = pipe(prompt=data.extraData["text"], 
-                  image=img, 
-                  negative_prompt=data.extraData["negative_prompt"],
-                  num_inference_steps=data.extraData["num_steps"],
-                  guidance_scale=data.extraData["guidance_scale"], 
-                  strength=data.extraData["strength"],
-                  generator=generator,
-                  num_images_per_prompt=data.extraData["num_samples"],
-                  callback=step_callback).images
+    if not data.extraData["use_highres"]:
+        lr_latents = pipe(
+                    prompt=data.extraData["text"], 
+                    image=img, 
+                    negative_prompt=data.extraData["negative_prompt"],
+                    num_inference_steps=data.extraData["num_steps"],
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    strength=data.extraData["strength"],
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback).images
+    else:
+        lr_latents = pipe(
+                    prompt=data.extraData["text"], 
+                    image=img, 
+                    negative_prompt=data.extraData["negative_prompt"],
+                    num_inference_steps=data.extraData["num_steps"],
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    strength=data.extraData["strength"],
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback,
+                    output_type="latent").images
+        
+        hr_latents = F.interpolate(lr_latents, scale_factor=data.extraData["highres_scale"], mode="nearest")
+        images = pipe(
+                    prompt=data.extraData["text"], 
+                    image=hr_latents, 
+                    negative_prompt=data.extraData["negative_prompt"],
+                    num_inference_steps=int(data.extraData["num_steps"]*hrfix_steps_ratio),
+                    guidance_scale=data.extraData["guidance_scale"], 
+                    strength=data.extraData["highres_strength"],
+                    generator=generator,
+                    num_images_per_prompt=data.extraData["num_samples"],
+                    callback=step_callback2).images
     
-    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
 def inpaint(pipe, img, mask, data, step_callback):
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
     img = img.convert("RGB")
     mask = png_to_mask(mask)
-    generator = get_generator(data.extraData["seed"])
 
     if data.extraData["focus_mode"]:
         img_c, mask_c, box = crop_masked_area(img, mask, data.extraData["w"], data.extraData["h"])
     else:
         img_c, mask_c = img, mask
-
-    orig_sampler = pipe.scheduler
-    pipe = alter_sampler(pipe, data.extraData["sampler"])
 
     images = pipe(prompt=data.extraData["text"],
                   image=img_c,
@@ -81,23 +130,21 @@ def inpaint(pipe, img, mask, data, step_callback):
     
     if data.extraData["focus_mode"]:
         images = recover_cropped_image(images, img, box)
-    
-    pipe.scheduler = orig_sampler
+
     torch.cuda.empty_cache()
     return images
 
 def cn_inpaint(pipe, img, mask, data, step_callback):
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
     img = img.convert("RGB")
     mask = png_to_mask(mask)
-    generator = get_generator(data.extraData["seed"])
 
     if data.extraData["focus_mode"]:
         img_c, mask_c, box = crop_masked_area(img, mask, data.extraData["w"], data.extraData["h"])
     else:
         img_c, mask_c = img, mask
 
-    orig_sampler = pipe.scheduler
-    pipe = alter_sampler(pipe, data.extraData["sampler"])
 
     masked_img = make_inpaint_condition(img_c, mask_c)
     images = pipe(prompt=data.extraData["text"],
@@ -118,15 +165,12 @@ def cn_inpaint(pipe, img, mask, data, step_callback):
     if data.extraData["focus_mode"]:
         images = recover_cropped_image(images, img, box)
 
-    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
 def cn_tile(pipe, img, data, step_callback):
-    generator = get_generator(data.extraData["seed"])
-
-    orig_sampler = pipe.scheduler
     pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
 
     images = pipe(prompt=data.extraData["text"],
                   image=img,
@@ -140,19 +184,13 @@ def cn_tile(pipe, img, data, step_callback):
                   controlnet_conditioning_scale= data.extraData["controlnet_conditioning_scale"],
                   callback=step_callback).images
     
-    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
 
 def style_transfer(model, img, data, step_callback):
-    if data.extraData["seed"] != -1:
-        generator=torch.Generator(device="cuda").manual_seed(data.extraData["seed"])
-    else:
-        generator=torch.Generator(device="cuda")
-        generator.seed()
-    orig_sampler = model.pipe.scheduler
     model.pipe = alter_sampler(model.pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
 
     images = model.generate(pil_image=img,
                           prompt=data.extraData["text"],
@@ -166,7 +204,6 @@ def style_transfer(model, img, data, step_callback):
                           num_samples=data.extraData["num_samples"],
                           callback=step_callback)
     
-    model.pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images
 
@@ -197,18 +234,17 @@ def easy_fusing(data0, data1, img0, img1):
 
 
 def edge_fusing(pipe, data, data0, data1, img0, img1, step_callback):
+    pipe = alter_sampler(pipe, data.extraData["sampler"])
+    generator = get_generator(data.extraData["seed"])
+
     img, _, _, mask = easy_fusing(data0, data1, img0, img1)
     mask = ExpandEdge(mask, 10)
     img = img.convert("RGB")
-    generator = get_generator(data.extraData["seed"])
 
     if data.extraData["focus_mode"]:
         img_c, mask_c, box = crop_masked_area(img, mask, data.extraData["w"], data.extraData["h"], 0.1)
     else:
         img_c, mask_c = img, mask
-
-    orig_sampler = pipe.scheduler
-    pipe = alter_sampler(pipe, data.extraData["sampler"])
 
     images = pipe(prompt=data.extraData["text"],
                   image=img_c,
@@ -225,17 +261,15 @@ def edge_fusing(pipe, data, data0, data1, img0, img1, step_callback):
     
     if data.extraData["focus_mode"]:
         images = recover_cropped_image(images, img, box)
-    
-    pipe.scheduler = orig_sampler
+
     torch.cuda.empty_cache()
     return images
 
 def smart_fusing(pipe, data, data0, data1, img0, img1, step_callback):
-    orig_sampler = pipe.scheduler
     pipe = alter_sampler(pipe, data.extraData["sampler"])
     generator = get_generator(data.extraData["seed"])
-    orig_fused_img, back_img, fore_img, mask = easy_fusing(data0, data1, img0, img1)
 
+    orig_fused_img, back_img, fore_img, mask = easy_fusing(data0, data1, img0, img1)
     init_imgs, init_mask, box = crop_masked_area([back_img, fore_img], mask, data.extraData["w"], data.extraData["h"], data.extraData["box_padding"])
     
     init_back_img = init_imgs[0]
@@ -260,6 +294,5 @@ def smart_fusing(pipe, data, data0, data1, img0, img1, step_callback):
                         callback=step_callback).images
 
     images = recover_cropped_image(fused_imgs, orig_fused_img, box)
-    pipe.scheduler = orig_sampler
     torch.cuda.empty_cache()
     return images

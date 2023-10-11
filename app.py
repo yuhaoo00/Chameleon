@@ -124,11 +124,20 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        if data.extraData["use_highres"]:
+            hrfix_steps_ratio = 0.5
+            hrfix_steps = int(data.extraData["num_steps"]*hrfix_steps_ratio*data.extraData["highres_strength"])
+        else:
+            hrfix_steps_ratio = 0
+            hrfix_steps = 0
+
         def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
+            return self.send_progress(step / (data.extraData["num_steps"] + hrfix_steps))
+        def callback2(step: int, *args) -> bool:
+            return self.send_progress((data.extraData["num_steps"]+step) / (data.extraData["num_steps"] + hrfix_steps))
         
         pipe = get_sd_t2i(data.extraData["version"])
-        return txt2img(pipe, data, callback)
+        return txt2img(pipe, data, hrfix_steps_ratio, callback, callback2)
 
 
 class Img2Img(IFieldsPlugin):
@@ -151,14 +160,23 @@ class Img2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        if data.extraData["use_highres"]:
+            hrfix_steps_ratio = 0.5
+            hrfix_steps = int(data.extraData["num_steps"]*hrfix_steps_ratio*data.extraData["highres_strength"])
+        else:
+            hrfix_steps_ratio = 0
+            hrfix_steps = 0
+
         def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
+            return self.send_progress(step / (data.extraData["num_steps"] + hrfix_steps))
+        def callback2(step: int, *args) -> bool:
+            return self.send_progress((data.extraData["num_steps"]+step) / (data.extraData["num_steps"] + hrfix_steps))
         
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
 
         pipe = get_sd_i2i(data.extraData["version"])
-        return img2img(pipe, img, data, callback)
+        return img2img(pipe, img, data, hrfix_steps_ratio, callback, callback2)
     
 class Tile(IFieldsPlugin):
     @property
