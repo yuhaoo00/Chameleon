@@ -13,6 +13,7 @@ from fields import *
 from extensions.annotators.hed import HEDdetector
 from extensions.annotators.zoe import ZoeDetector
 from extensions.annotators.canny import CannyDetector
+import utils.icon_paths as paths
 # plugins
 
 class Upscale(IFieldsPlugin):
@@ -21,7 +22,7 @@ class Upscale(IFieldsPlugin):
         return IPluginSettings(
             w=480,
             h=250,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.SR_ICON,
             tooltip=I18N(
                 zh="超分辨率",
                 en="Super Resolution",
@@ -49,7 +50,7 @@ class Canny(IFieldsPlugin):
         return IPluginSettings(
             w=480,
             h=250,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.EDGE_ICON,
             tooltip=I18N(
                 zh="获取Canny图",
                 en="Get Canny",
@@ -77,7 +78,7 @@ class Zoe(IFieldsPlugin):
         return IPluginSettings(
             w=240,
             h=110,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.DEPTH_ICON,
             tooltip=I18N(
                 zh="获取Zoe图",
                 en="Get Zoe",
@@ -105,7 +106,7 @@ class Hed(IFieldsPlugin):
         return IPluginSettings(
             w=240,
             h=110,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.SOFTEDGE_ICON,
             tooltip=I18N(
                 zh="获取HED图",
                 en="Get HED",
@@ -136,7 +137,7 @@ class Txt2Img(IFieldsPlugin):
             maxW=800,
             minH=520,
             useModal=True,
-            src=constants.TEXT_TO_IMAGE_ICON,
+            src=paths.TEXT_TO_IMAGE_ICON,
             tooltip=I18N(
                 zh="文生图",
                 en="Text to Image",
@@ -173,7 +174,7 @@ class Img2Img(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.IMAGE_TO_IMAGE_ICON,
             tooltip=I18N(
                 zh="图生图",
                 en="Image to Image",
@@ -211,7 +212,7 @@ class Tile(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.DETAIL_ICON,
             tooltip=I18N(
                 zh="重绘细节",
                 en="Repaint Details (Tile)",
@@ -240,7 +241,7 @@ class Inpainting(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.SD_INPAINTING_ICON,
+            src=paths.INPAINT_ICON,
             tooltip=I18N(
                 zh="局部重绘",
                 en="Inpainting",
@@ -272,7 +273,7 @@ class CNInpainting(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.SD_INPAINTING_ICON,
+            src=paths.CNINPAINT_ICON,
             tooltip=I18N(
                 zh="局部替换 (ControlNet)",
                 en="Inpainting (ControlNet)",
@@ -305,7 +306,7 @@ class StyleTransfer(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.IMAGE_TO_IMAGE_ICON,
+            src=paths.STYLE_ICON,
             tooltip=I18N(
                 zh="风格迁移",
                 en="Style Transfer"
@@ -336,7 +337,7 @@ class Matting(IFieldsPlugin):
         return IPluginSettings(
             w=240,
             h=180,
-            src=constants.SOD_ICON,
+            src=paths.SOD_ICON,
             tooltip=I18N(
                 zh="抠图",
                 en="Image Matting",
@@ -379,7 +380,7 @@ class EasyFusing(IFieldsPlugin):
         return IPluginSettings(
             w=240,
             h=110,
-            src=constants.SOD_ICON,
+            src=paths.FUSING_ICON,
             tooltip=I18N(
                 zh="直接融合",
                 en="Easy Fusing",
@@ -413,7 +414,7 @@ class EdgeFusing(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.SOD_ICON,
+            src=paths.EDGEFUSING_ICON,
             tooltip=I18N(
                 zh="边缘融合",
                 en="Edge Fusing",
@@ -450,7 +451,7 @@ class SmartFusing(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=constants.SOD_ICON,
+            src=paths.BODYFUSING_ICON,
             tooltip=I18N(
                 zh="智能融合",
                 en="Smart Fusing",
@@ -516,7 +517,7 @@ class ImageFollowers(IPluginGroup):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             w=common_group_styles["w"],
-            h=164,
+            h=220,
             tooltip=I18N(
                 zh="AIGC工具箱",
                 en="AIGC Toolbox",
