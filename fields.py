@@ -453,7 +453,7 @@ sr_fields = OrderedDict(
             zh="模型", 
             en="Model")
     ),
-    upscale=INumberField(
+    scale=INumberField(
         default=2.0,
         min=1.1,
         max=4.0,

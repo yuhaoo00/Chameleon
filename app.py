@@ -1,6 +1,6 @@
 import sys
 sys.path.append("/mnt/Data/CodeML/SD/Chameleon")
-
+import requests
 import numpy as np
 import cv2
 from PIL import Image
@@ -8,7 +8,7 @@ from typing import List
 from cfdraw import *
 from utils.generate import *
 from utils.load import *
-from utils.prepocess import *
+from utils import img_transform, str2img, img2str, png_to_mask
 from fields import *
 from extensions.annotators.hed import HEDdetector
 from extensions.annotators.zoe import ZoeDetector
@@ -40,9 +40,15 @@ class Upscale(IFieldsPlugin):
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
 
-        model = get_upscaler(data.extraData["version"])
-        res = upscale(model, img, data)
-        return [res]
+        data_to_send = {
+            "image": img2str(img)[0],
+            "tag": data.extraData["version"],
+            "scale": data.extraData["scale"],
+        }
+
+        response = requests.post('http://0.0.0.0:8000/upscale', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
 
 class Canny(IFieldsPlugin):
     @property
@@ -153,20 +159,23 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        if data.extraData["use_highres"]:
-            hrfix_steps_ratio = 0.5
-            hrfix_steps = int(data.extraData["num_steps"]*hrfix_steps_ratio*data.extraData["highres_strength"])
-        else:
-            hrfix_steps_ratio = 0
-            hrfix_steps = 0
+        data_to_send = {
+            "text": data.extraData["text"],
+            "num_steps": data.extraData["num_steps"],
+            "guidance_scale": data.extraData["guidance_scale"],
+            "seed": data.extraData["seed"],
+            "negative_prompt": data.extraData["negative_prompt"],
+            "h": data.extraData["h"],
+            "w": data.extraData["w"],
+            "num_samples": data.extraData["num_samples"],
+            "use_hrfix": data.extraData["use_highres"],
+            "hrfix_scale": data.extraData["highres_scale"] if data.extraData["use_highres"] else None,
+            "hrfix_strength": data.extraData["highres_strength"] if data.extraData["use_highres"] else None,
+        }
 
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / (data.extraData["num_steps"] + hrfix_steps))
-        def callback2(step: int, *args) -> bool:
-            return self.send_progress((data.extraData["num_steps"]+step) / (data.extraData["num_steps"] + hrfix_steps))
-        
-        pipe = get_sd_t2i(data.extraData["version"])
-        return txt2img(pipe, data, hrfix_steps_ratio, callback, callback2)
+        response = requests.post('http://0.0.0.0:8000/t2i', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
 
 
 class Img2Img(IFieldsPlugin):
@@ -189,23 +198,26 @@ class Img2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        if data.extraData["use_highres"]:
-            hrfix_steps_ratio = 0.5
-            hrfix_steps = int(data.extraData["num_steps"]*hrfix_steps_ratio*data.extraData["highres_strength"])
-        else:
-            hrfix_steps_ratio = 0
-            hrfix_steps = 0
-
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / (data.extraData["num_steps"] + hrfix_steps))
-        def callback2(step: int, *args) -> bool:
-            return self.send_progress((data.extraData["num_steps"]+step) / (data.extraData["num_steps"] + hrfix_steps))
-        
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
 
-        pipe = get_sd_i2i(data.extraData["version"])
-        return img2img(pipe, img, data, hrfix_steps_ratio, callback, callback2)
+        data_to_send = {
+            "text": data.extraData["text"],
+            "image": img2str(img)[0],
+            "strength": data.extraData["strength"],
+            "num_steps": data.extraData["num_steps"],
+            "guidance_scale": data.extraData["guidance_scale"],
+            "seed": data.extraData["seed"],
+            "negative_prompt": data.extraData["negative_prompt"],
+            "num_samples": data.extraData["num_samples"],
+            "use_hrfix": data.extraData["use_highres"],
+            "hrfix_scale": data.extraData["highres_scale"] if data.extraData["use_highres"] else None,
+            "hrfix_strength": data.extraData["highres_strength"] if data.extraData["use_highres"] else None,
+        }
+
+        response = requests.post('http://0.0.0.0:8000/i2i', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
     
 class Tile(IFieldsPlugin):
     @property
@@ -256,17 +268,31 @@ class Inpainting(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
-
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
         img = img_transform(img, url_node)
         mask = await self.load_image(mask_node.src)
+        mask = png_to_mask(mask)
 
-        pipe = get_sd_inpaint(data.extraData["version"])
-        return inpaint(pipe, img, mask, data, callback)
+        data_to_send = {
+            "text": data.extraData["text"],
+            "image": img2str(img)[0],
+            "mask": img2str(mask)[0],
+            "strength": data.extraData["strength"],
+            "num_steps": data.extraData["num_steps"],
+            "guidance_scale": data.extraData["guidance_scale"],
+            "seed": data.extraData["seed"],
+            "negative_prompt": data.extraData["negative_prompt"],
+            "num_samples": data.extraData["num_samples"],
+            "h": data.extraData["h"],
+            "w": data.extraData["w"],
+            "focus_mode": data.extraData["focus_mode"]
+        }
+
+        response = requests.post('http://0.0.0.0:8000/inpaint', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
     
 class CNInpainting(IFieldsPlugin):
     @property
