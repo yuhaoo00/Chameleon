@@ -213,6 +213,10 @@ class SDXL_Inpaint_Pipeline:
         target_size: Optional[Tuple[int, int]] = None,
         clip_skip: Optional[int] = None,):
 
+        self.base.text_encoder.to(self.base.device)
+        self.base.text_encoder_2.to(self.base.device)
+        self.base.vae.to(self.base.device)
+
         if height is None: height = 1024 
         if width is None: width = 1024 
         if num_images_per_prompt is None: num_images_per_prompt = 1
@@ -249,6 +253,7 @@ class SDXL_Inpaint_Pipeline:
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             pooled_prompt_embeds = torch.cat([negative_pooled_prompt_embeds, pooled_prompt_embeds], dim=0)
 
+        del negative_prompt_embeds, negative_pooled_prompt_embeds
         
         self.base.scheduler.set_timesteps(num_inference_steps, device=self.base.device)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)

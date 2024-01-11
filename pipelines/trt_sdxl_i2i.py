@@ -106,6 +106,10 @@ class SDXL_I2I_Pipeline:
         target_size: Optional[Tuple[int, int]] = None,
         clip_skip: Optional[int] = None,):
 
+        self.base.text_encoder.to(self.base.device)
+        self.base.text_encoder_2.to(self.base.device)
+        self.base.vae.to(self.base.device)
+
         if num_images_per_prompt is None: num_images_per_prompt = 1
 
         if prompt is not None and isinstance(prompt, str):
@@ -142,6 +146,7 @@ class SDXL_I2I_Pipeline:
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             pooled_prompt_embeds = torch.cat([negative_pooled_prompt_embeds, pooled_prompt_embeds], dim=0)
 
+        del negative_prompt_embeds, negative_pooled_prompt_embeds
         
         self.base.scheduler.set_timesteps(num_inference_steps, device=self.base.device)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
@@ -150,7 +155,7 @@ class SDXL_I2I_Pipeline:
         latents = self.initialize_latents(
             image,
             latent_timestep,
-            batch_size,
+            batch_size*num_images_per_prompt,
             num_images_per_prompt,
             prompt_embeds.dtype,
             generator,

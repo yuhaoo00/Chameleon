@@ -207,7 +207,7 @@ class EngineWrapper():
     def infer(self, feed_dict, stream, use_cuda_graph=False):
         for name, buf in feed_dict.items():
             self.tensors[name].copy_(buf)
-            #print(name, self.tensors[name].dtype)
+
 
         for name, tensor in self.tensors.items():
             self.context.set_tensor_address(name, tensor.data_ptr())

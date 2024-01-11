@@ -10,8 +10,8 @@ from fastapi import FastAPI
 
 from pipelines.engine import TRT_LOGGER
 from pipelines.trt_sdxl_base import SD_TRT
-from generate import txt2img, img2img, upscale, inpaint
-from utils import torch_gc, Inputdata, Outputdata, Inputdata_upscale, Inputdata_inpaint
+from generate import txt2img, img2img, upscale, inpaint, demofusion
+from utils import torch_gc, Inputdata, Outputdata, Inputdata_upscale, Inputdata_inpaint, Inputdata_demofusion
 
 app = FastAPI()
 
@@ -84,6 +84,23 @@ async def sd_inpaint(request: Inputdata_inpaint) -> Outputdata:
     torch_gc()
     return answer
 
+@app.post("/demofusion")
+async def sd_demofusion(request: Inputdata_demofusion) -> Outputdata:
+    time1 = time.time()
+
+    imgs_str = demofusion(sdbase, request)
+
+    time2 = time.time()
+    answer = Outputdata(
+        imgs=imgs_str,
+        time=round(time2-time1,8)
+    )
+
+    log = "#SD_DemoFusion " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    print(log)
+    torch_gc()
+    return answer
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="API for Stable Diffusion (TensorRT)")
@@ -102,6 +119,7 @@ if __name__ == '__main__':
     sdbase = SD_TRT(
             hf_dir=config['pipe_dir']['hf_dir'],
             engine_dir=config['pipe_dir']['onnx_opt_dir'],
+            vae_dir="/work/CKPTS/madebyollin--sdxl-vae-fp16-fix",
             engine_config=config['TRT_build']['input_shapes']['unet'],
             enable_dynamic_shape=config['TRT_build']['enable_dynamic_shape'])
     

@@ -23,14 +23,9 @@ w_field = INumberField(
         zh="宽",
         en="Width",
     ),
-    tooltip=I18N(
-        zh="生成图片的宽度",
-        en="The width of the generated image",
-    ),
 )
 h_field = w_field.copy()
 h_field.label = I18N(zh="高", en="Height")
-h_field.tooltip = I18N(zh="生成图片的高度", en="The height of the generated image")
 max_wh_field = INumberField(
     default=1024,
     min=256,
@@ -41,10 +36,6 @@ max_wh_field = INumberField(
         zh="最大宽高",
         en="Max WH",
     ),
-    tooltip=I18N(
-        zh="把图片传给模型处理前，会先把图片限制在这个尺寸内",
-        en="Before passing the image to the model, the image will be ensured to be within this size",
-    ),
 )
 text = ITextField(
     label=I18N(
@@ -52,10 +43,6 @@ text = ITextField(
         en="Prompt",
     ),
     numRows=2,
-    tooltip=I18N(
-        zh="想要生成的图片的描述",
-        en="The description of the image",
-    ),
 )
 version_field = ISelectField(
     default="SDXL",
@@ -96,10 +83,6 @@ negative_prompt = ITextField(
         en="Negative Prompt",
     ),
     numRows=2,
-    tooltip=I18N(
-        zh="不想图片中出现的东西的描述",
-        en="The negative description of the image",
-    ),
 )
 num_samples = INumberField(
     default=1,
@@ -134,19 +117,11 @@ seed = INumberField(
         zh="随机种子",
         en="Seed",
     ),
-    tooltip=I18N(
-        zh="'-1' 表示种子将会被随机生成",
-        en="'-1' means the seed will be randomly generated",
-    ),
 )
 
 use_highres = IBooleanField(
     default=False,
     label=I18N(
-        zh="高清生成",
-        en="Highres",
-    ),
-    tooltip=I18N(
         zh="高清生成",
         en="Highres",
     ),
@@ -160,10 +135,6 @@ highres_scale = INumberField(
         zh="上采样倍数",
         en="Upscale by",
     ),
-    tooltip=I18N(
-        zh="上采样倍数",
-        en="Upscale by",
-    ),
     condition="use_highres",
 )
 highres_strength = INumberField(
@@ -172,10 +143,6 @@ highres_strength = INumberField(
     max=1.0,
     step=0.05,
     label=I18N(
-        zh="相似度",
-        en="strength",
-    ),
-    tooltip=I18N(
         zh="相似度",
         en="strength",
     ),
@@ -221,12 +188,40 @@ canny_fields = OrderedDict(
     high_threshold=high_threshold,
 )
 
+controlnet_fields = OrderedDict(
+    type=ISelectField(
+            options=["canny", "depth"],
+            default="canny",
+            label=I18N(zh="参考图类型", en="Hint Type"),
+        ),
+    hint_url=IImageField(default="", label=I18N(zh="参考图", en="Hint Image")),
+    skip_annotator=IBooleanField(
+            default=False,
+            label=I18N(zh="跳过预处理器", en="Skip Annotator"),
+        ),
+    hint_start=INumberField(
+        default=0.0,
+        min=0.0,
+        max=1.0,
+        step=0.01,
+        label=I18N(zh="参考图生效时机", en="Hint Start"),
+    ),
+    control_strength=INumberField(
+        default=1.0,
+        min=0.0,
+        max=2.0,
+        step=0.01,
+        label=I18N(zh="参考强度", en="Control Strength"),
+    ),
+)
+
+###############################################################################
+
 # txt2img
 txt2img_fields = OrderedDict(
     w=w_field,
     h=h_field,
     text=text,
-    version=version_field,
     sampler=sampler,
     negative_prompt=negative_prompt,
     num_steps=num_steps,
@@ -236,13 +231,16 @@ txt2img_fields = OrderedDict(
     use_highres=use_highres,
     highres_scale=highres_scale,
     highres_strength=highres_strength,
+    control=IListField(
+        label="ControlNet",
+        item=controlnet_fields,
+    ),
 )
 
 # img2img fields
 img2img_prompt = text.copy()
 img2img_prompt.numRows = 3
 img2img_fields = OrderedDict(
-    version=version_field,
     text=img2img_prompt,
     negative_prompt=negative_prompt,
     sampler=sampler,
@@ -254,6 +252,10 @@ img2img_fields = OrderedDict(
     use_highres=use_highres,
     highres_scale=highres_scale,
     highres_strength=highres_strength,
+    control=IListField(
+        label="ControlNet",
+        item=controlnet_fields,
+    ),
 )
 
 # styletransfer fields
@@ -294,14 +296,6 @@ st_fields = OrderedDict(
 inpainting_prompt = text.copy()
 inpainting_prompt.numRows = 3
 inpainting_fields = OrderedDict(
-    version=ISelectField(
-        default="SDXL",
-        options=["SDXL", "SDXL (ft)", "SDv2", "SDv2 (ft)", "SDv1", "SDv1 (ft)"],
-        label=I18N(
-            zh="模型", 
-            en="Model"
-        ),
-    ),
     w=w_field,
     h=h_field,
     text=inpainting_prompt,
@@ -315,10 +309,6 @@ inpainting_fields = OrderedDict(
     focus_mode=IBooleanField(
         default=False,
         label=I18N(zh="聚焦模式", en="Focus Mode"),
-        tooltip=I18N(
-            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素",
-            en="When enabled, the model will only focus on the masked region and some surrounding pixels.",
-        ),
     ),
 )
 # controlnet
@@ -332,19 +322,113 @@ controlnet_scale = INumberField(
         en="Conditioning Scale",
     ),
 )
-tile_prompt = text.copy()
-tile_prompt.numRows = 3
-tile_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    text=tile_prompt,
+demofusion_prompt = text.copy()
+demofusion_prompt.numRows = 3
+demofusion_fields = OrderedDict(
+    w=INumberField(
+            default=2048,
+            min=1024,
+            max=4096,
+            step=256,
+            isInt=True,
+            label=I18N(
+                zh="Width",
+                en="Width",
+            ),
+        ),
+    h=INumberField(
+            default=2048,
+            min=1024,
+            max=4096,
+            step=256,
+            isInt=True,
+            label=I18N(
+                zh="Height",
+                en="Height",
+            ),
+        ),
+    text=demofusion_prompt,
     negative_prompt=negative_prompt,
     sampler=sampler,
     num_steps=num_steps,
     guidance_scale=guidance_scale,
-    controlnet_conditioning_scale=controlnet_scale,
     seed=seed,
-    num_samples=num_samples,
+    view_batch_size=INumberField(
+            default=4,
+            min=1,
+            max=8,
+            step=1,
+            isInt=True,
+            label=I18N(
+                zh="View Batch Size",
+                en="View Batch Size",
+            ),
+        ),
+    stride=INumberField(
+            default=64,
+            min=0,
+            max=128,
+            step=16,
+            isInt=True,
+            label=I18N(
+                zh="View Stride",
+                en="View Stride",
+            ),
+        ),
+    multi_decoder=IBooleanField(
+            default=True,
+            label=I18N(
+                zh="Multi decoder",
+                en="Multi decoder",
+            ),
+        ),
+    cosine_scale_1=INumberField(
+            default=3,
+            min=0,
+            max=10,
+            isInt=False,
+            label=I18N(
+                zh="Cosine Scale 1",
+                en="Cosine Scale 1",
+            ),
+        ),
+    cosine_scale_2=INumberField(
+            default=1,
+            min=0,
+            max=10,
+            isInt=False,
+            label=I18N(
+                zh="Cosine Scale 2",
+                en="Cosine Scale 2",
+            ),
+        ),
+    cosine_scale_3=INumberField(
+            default=1,
+            min=0,
+            max=10,
+            isInt=False,
+            label=I18N(
+                zh="Cosine Scale 3",
+                en="Cosine Scale 3",
+            ),
+        ),
+    sigma=INumberField(
+            default=0.8,
+            min=0,
+            max=1.0,
+            isInt=False,
+            label=I18N(
+                zh="Gaussian Sigma",
+                en="Gaussian Sigma",
+            ),
+        ),
+    lowvram=IBooleanField(
+            default=True,
+            label=I18N(
+                zh="Lowvram",
+                en="Lowvram",
+            ),
+        ),
 )
 
 cn_inpainting_fields = OrderedDict(
@@ -362,10 +446,6 @@ cn_inpainting_fields = OrderedDict(
     focus_mode=IBooleanField(
         default=False,
         label=I18N(zh="聚焦模式", en="Focus Mode"),
-        tooltip=I18N(
-            zh="启用聚焦模式时，模型会仅关注蒙版区域及周边的一些像素",
-            en="When enabled, the model will only focus on the masked region and some surrounding pixels.",
-        ),
     ),
 )
 
@@ -422,10 +502,6 @@ smart_fusing_fields = OrderedDict(
     guess_mode=IBooleanField(
         default=False,
         label=I18N(zh="推测模式", en="Guess Mode"),
-        tooltip=I18N(
-            zh="即使删除所有提示，ControlNet编码器也会尝试识别输入图像的内容",
-            en="The ControlNet encoder tries to recognize the content of the input image even if you remove all prompts.",
-        ),
     ),
     box_padding=box_padding,
     mask_expand=mask_expand,
@@ -462,13 +538,8 @@ sr_fields = OrderedDict(
             zh="上采样倍数",
             en="Upscale by",
         ),
-        tooltip=I18N(
-            zh="上采样倍数",
-            en="Upscale by",
-        ),
     )
 )
-
 
 __all__ = [
     "common_styles",
@@ -482,6 +553,6 @@ __all__ = [
     "inpainting_fields",
     "cn_inpainting_fields",
     "smart_fusing_fields",
-    "tile_fields",
+    "demofusion_fields",
     "matting_fields",
 ]

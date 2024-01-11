@@ -23,6 +23,7 @@ class SD_TRT:
         self,
         hf_dir="./",
         engine_dir="./",
+        vae_dir=None,
         engine_config={},
         enable_dynamic_shape=True,
         device='cuda',
@@ -59,8 +60,11 @@ class SD_TRT:
         self.text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(hf_dir/"text_encoder_2", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
 
         # load VAE_decoder
-        self.vae = AutoencoderKL.from_pretrained(hf_dir/"vae_1_0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
-        self.needs_upcasting = self.vae.dtype == torch.float16
+        if vae_dir is None:
+            self.vae = AutoencoderKL.from_pretrained(hf_dir/"vae_1_0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
+        else:
+            self.vae = AutoencoderKL.from_pretrained(vae_dir, torch_dtype=torch.float16, use_safetensors=True).to(self.device)
+        self.needs_upcasting = (self.vae.dtype == torch.float16 and self.vae.config.force_upcast)
         self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels)-1)
 
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
@@ -68,6 +72,13 @@ class SD_TRT:
         # load Scheduler
         self.scheduler_config = hf_dir/"scheduler"
         self.scheduler = getattr(importlib.import_module("diffusers"), scheduler_class).from_pretrained(self.scheduler_config)
+    
+    def activateEngines(self, shared_device_memory=None):
+        if shared_device_memory is None:
+            _, shared_device_memory = cudart.cudaMalloc(self.unet_engine.engine.device_memory_size)
+        self.shared_device_memory = shared_device_memory
+        # Load and activate TensorRT engines
+        self.unet_engine.activate(reuse_device_memory=self.shared_device_memory)
 
     def loadResources(self, image_height, image_width, batch_size, do_cfg):
         # Create CUDA events and stream
@@ -82,8 +93,6 @@ class SD_TRT:
             tmp = v['opt']
             if k != 'timestep':
                 tmp[0] = batch_size*2 if do_cfg else batch_size
-            else:
-                tmp[0] = batch_size
             if k == 'sample':
                 tmp[2], tmp[3] = image_height//self.vae_scale_factor, image_width//self.vae_scale_factor
             input_shape[k] = tuple(tmp)
@@ -102,12 +111,38 @@ class SD_TRT:
         cudart.cudaStreamDestroy(self.stream)
         del self.stream
 
-    def activateEngines(self, shared_device_memory=None):
-        if shared_device_memory is None:
-            _, shared_device_memory = cudart.cudaMalloc(self.unet_engine.engine.device_memory_size)
-        self.shared_device_memory = shared_device_memory
-        # Load and activate TensorRT engines
-        self.unet_engine.activate(reuse_device_memory=self.shared_device_memory)
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
+    def enable_vae_slicing(self):
+        r"""
+        Enable sliced VAE decoding. When this option is enabled, the VAE will split the input tensor in slices to
+        compute decoding in several steps. This is useful to save some memory and allow larger batch sizes.
+        """
+        self.vae.enable_slicing()
+
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.disable_vae_slicing
+    def disable_vae_slicing(self):
+        r"""
+        Disable sliced VAE decoding. If `enable_vae_slicing` was previously enabled, this method will go back to
+        computing decoding in one step.
+        """
+        self.vae.disable_slicing()
+
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_tiling
+    def enable_vae_tiling(self):
+        r"""
+        Enable tiled VAE decoding. When this option is enabled, the VAE will split the input tensor into tiles to
+        compute decoding and encoding in several steps. This is useful for saving a large amount of memory and to allow
+        processing larger images.
+        """
+        self.vae.enable_tiling()
+
+    # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.disable_vae_tiling
+    def disable_vae_tiling(self):
+        r"""
+        Disable tiled VAE decoding. If `enable_vae_tiling` was previously enabled, this method will go back to
+        computing decoding in one step.
+        """
+        self.vae.disable_tiling()
 
     def initialize_latents(self, batch_size, unet_channels, latent_height, latent_width, generator):
         latents_shape = (batch_size, unet_channels, latent_height, latent_width)

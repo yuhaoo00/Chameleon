@@ -4,7 +4,6 @@ from extensions.IPAdapter.ip_adapter import IPAdapterXL, IPAdapter
 from diffusers import AutoPipelineForText2Image, AutoPipelineForImage2Image, AutoPipelineForInpainting
 from diffusers import StableDiffusionControlNetPipeline, StableDiffusionControlNetInpaintPipeline, StableDiffusionControlNetImg2ImgPipeline, ControlNetModel
 from diffusers import DPMSolverMultistepScheduler, 	EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler
-from pipelines import StyleControlInpaint_sd15, StyleControlInpaint_sdxl
 from extensions.realesrgan import RealESRGANer
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
@@ -61,6 +60,8 @@ def get_sd_inpaint(tag, cpu_off=True):
 
 
 def get_style_inpaint(tag, cn_tag):
+    from pipelines.sd15_inpaint_control import StyleControlInpaint_sd15
+    from pipelines.sdxl_inpaint_control import StyleControlInpaint_sdxl
     torch.cuda.empty_cache()
     inpaint_pipe = get_sd_inpaint(tag, False)
     if 'v1' in tag:

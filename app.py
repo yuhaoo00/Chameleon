@@ -8,7 +8,7 @@ from typing import List
 from cfdraw import *
 from utils.generate import *
 from utils.load import *
-from utils import img_transform, str2img, img2str, png_to_mask
+from utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet
 from fields import *
 from extensions.annotators.hed import HEDdetector
 from extensions.annotators.zoe import ZoeDetector
@@ -159,6 +159,8 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        control, control_hint, control_hint_skip, control_hint_start, control_strength = parser_controlnet(data.extraData["control"])
+
         data_to_send = {
             "text": data.extraData["text"],
             "num_steps": data.extraData["num_steps"],
@@ -171,6 +173,11 @@ class Txt2Img(IFieldsPlugin):
             "use_hrfix": data.extraData["use_highres"],
             "hrfix_scale": data.extraData["highres_scale"] if data.extraData["use_highres"] else None,
             "hrfix_strength": data.extraData["highres_strength"] if data.extraData["use_highres"] else None,
+            "control": control,
+            "control_hint": control_hint,
+            "control_hint_skip": control_hint_skip,
+            "control_hint_start": control_hint_start,
+            "control_strength": control_strength,
         }
 
         response = requests.post('http://0.0.0.0:8000/t2i', json=data_to_send).json()
@@ -182,7 +189,11 @@ class Img2Img(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
-            **common_styles,
+            w=0.75,
+            h=0.4,
+            maxW=800,
+            minH=520,
+            useModal=True,
             src=paths.IMAGE_TO_IMAGE_ICON,
             tooltip=I18N(
                 zh="图生图",
@@ -193,6 +204,7 @@ class Img2Img(IFieldsPlugin):
                     zh="图生图",
                     en="Image to Image",
                 ),
+                numColumns=2,
                 definitions=img2img_fields,
             ),
         )
@@ -200,6 +212,7 @@ class Img2Img(IFieldsPlugin):
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
+        control, control_hint, control_hint_skip, control_hint_start, control_strength = parser_controlnet(data.extraData["control"])
 
         data_to_send = {
             "text": data.extraData["text"],
@@ -213,13 +226,18 @@ class Img2Img(IFieldsPlugin):
             "use_hrfix": data.extraData["use_highres"],
             "hrfix_scale": data.extraData["highres_scale"] if data.extraData["use_highres"] else None,
             "hrfix_strength": data.extraData["highres_strength"] if data.extraData["use_highres"] else None,
+            "control": control,
+            "control_hint": control_hint,
+            "control_hint_skip": control_hint_skip,
+            "control_hint_start": control_hint_start,
+            "control_strength": control_strength,
         }
 
         response = requests.post('http://0.0.0.0:8000/i2i', json=data_to_send).json()
         imgs = str2img(response["imgs"])
         return imgs
     
-class Tile(IFieldsPlugin):
+class DemoFusion(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
@@ -227,26 +245,43 @@ class Tile(IFieldsPlugin):
             src=paths.DETAIL_ICON,
             tooltip=I18N(
                 zh="重绘细节",
-                en="Repaint Details (Tile)",
+                en="DemoFusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
                     zh="重绘细节",
-                    en="Repaint Details (Tile)",
+                    en="DemoFusion",
                 ),
-                definitions=tile_fields,
+                definitions=demofusion_fields,
             ),
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
-        
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
 
-        pipe = get_controlnet("v11_sd15_tile")
-        return cn_tile(pipe, img, data, callback)
+        data_to_send = {
+            "text": data.extraData["text"],
+            "image": img2str(img)[0],
+            "num_steps": data.extraData["num_steps"],
+            "guidance_scale": data.extraData["guidance_scale"],
+            "seed": data.extraData["seed"],
+            "negative_prompt": data.extraData["negative_prompt"],
+            "h": data.extraData["h"],
+            "w": data.extraData["w"],
+            "view_batch_size": data.extraData["view_batch_size"],
+            "stride": data.extraData["stride"],
+            "multi_decoder": data.extraData["multi_decoder"],
+            "cosine_scale_1": data.extraData["cosine_scale_1"],
+            "cosine_scale_2": data.extraData["cosine_scale_2"],
+            "cosine_scale_3": data.extraData["cosine_scale_3"],
+            "sigma": data.extraData["sigma"],
+            "lowvram": data.extraData["lowvram"],
+        }
+
+        response = requests.post('http://0.0.0.0:8000/demofusion', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
     
 class Inpainting(IFieldsPlugin):
     @property
@@ -563,7 +598,7 @@ class ImageFollowers(IPluginGroup):
                 plugins={
                     "img2img": Img2Img,
                     "styletransfer": StyleTransfer,
-                    "tile": Tile,
+                    "demofusion": DemoFusion,
                     "canny": Canny,
                     "hed": Hed,
                     "zoe": Zoe,

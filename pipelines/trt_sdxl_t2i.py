@@ -9,8 +9,8 @@ class SDXL_T2I_Pipeline:
         self.base = base
         
 
-    def initialize_latents(self, batch_size, unet_channels, latent_height, latent_width, generator):
-        latents_shape = (batch_size, unet_channels, latent_height, latent_width)
+    def initialize_latents(self, batch_size, latent_height, latent_width, generator):
+        latents_shape = (batch_size, 4, latent_height, latent_width)
         latents = randn_tensor(latents_shape, generator=generator, device=self.base.device, dtype=torch.float16)
         latents = latents * self.base.scheduler.init_noise_sigma
         return latents
@@ -39,6 +39,10 @@ class SDXL_T2I_Pipeline:
         crops_coords_top_left: Tuple[int, int] = (0, 0),
         target_size: Optional[Tuple[int, int]] = None,
         clip_skip: Optional[int] = None,):
+
+        self.base.text_encoder.to(self.base.device)
+        self.base.text_encoder_2.to(self.base.device)
+        self.base.vae.to(self.base.device)
 
         if height is None: height = 1024 
         if width is None: width = 1024 
@@ -80,6 +84,8 @@ class SDXL_T2I_Pipeline:
         if do_cfg:
             prompt_embeds = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
             pooled_prompt_embeds = torch.cat([negative_pooled_prompt_embeds, pooled_prompt_embeds], dim=0)
+        
+        del negative_prompt_embeds, negative_pooled_prompt_embeds
 
         # Time embeddings
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
@@ -91,8 +97,7 @@ class SDXL_T2I_Pipeline:
         timesteps = self.base.scheduler.timesteps
 
         latents = self.initialize_latents(
-                batch_size=batch_size,
-                unet_channels=4,
+                batch_size=batch_size*num_images_per_prompt,
                 latent_height=(height//self.base.vae_scale_factor),
                 latent_width=(width//self.base.vae_scale_factor),
                 generator=generator,

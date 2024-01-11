@@ -1,9 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
-from pipelines.trt_sdxl_t2i import SDXL_T2I_Pipeline
-from pipelines.trt_sdxl_i2i import SDXL_I2I_Pipeline
-from pipelines.trt_sdxl_inpaint import SDXL_Inpaint_Pipeline
+from pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion
 from utils import torch_gc, str2img, img2str, crop_masked_area, recover_cropped_image
 
 main_dir = "/work/CKPTS/"
@@ -140,6 +138,33 @@ def inpaint(base, data):
     images_str = img2str(images)
     return images_str
 
+
+def demofusion(base, data):
+    pipe = SDXL_DemoFusion(base)
+    generator = get_generator(data.seed)
+
+    image_prompt = str2img(data.image)[0]
+
+    images = pipe.infer(
+                    prompt=data.text,
+                    negative_prompt=data.negative_prompt,
+                    image_lr=image_prompt,
+                    height=data.h,
+                    width=data.w,
+                    num_inference_steps=data.num_steps,
+                    guidance_scale=data.guidance_scale, 
+                    generator=generator,
+                    view_batch_size=data.view_batch_size,
+                    stride=data.stride,
+                    multi_decoder=data.multi_decoder,
+                    cosine_scale_1=data.cosine_scale_1,
+                    cosine_scale_2=data.cosine_scale_2,
+                    cosine_scale_3=data.cosine_scale_3,
+                    sigma=data.sigma,
+                    lowvram=data.lowvram)
+    
+    images_str = img2str(images)
+    return images_str
 
 
 
