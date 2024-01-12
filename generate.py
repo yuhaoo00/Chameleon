@@ -1,8 +1,8 @@
 import torch
 import numpy as np
 from PIL import Image
-from pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion
-from utils import torch_gc, str2img, img2str, crop_masked_area, recover_cropped_image
+from pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion, SDXL_T2I_CN_Pipeline
+from utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image
 
 main_dir = "/work/CKPTS/"
 
@@ -21,10 +21,52 @@ def get_generator(seed):
 
 
 def txt2img(base, data):
-    pipe = SDXL_T2I_Pipeline(base)
     generator = get_generator(data.seed)
 
-    if not data.use_hrfix:
+    if not data.control:
+        pipe = SDXL_T2I_Pipeline(base)
+
+        if not data.use_hrfix:
+            images = pipe.infer(
+                        prompt=data.text,
+                        negative_prompt=data.negative_prompt,
+                        height=data.h,
+                        width=data.w,
+                        num_inference_steps=data.num_steps,
+                        guidance_scale=data.guidance_scale, 
+                        generator=generator,
+                        num_images_per_prompt=data.num_samples)
+        else:
+            lr_latents = pipe.infer(
+                        prompt=data.text,
+                        negative_prompt=data.negative_prompt,
+                        height=data.h,
+                        width=data.w,
+                        num_inference_steps=data.num_steps,
+                        guidance_scale=data.guidance_scale, 
+                        generator=generator,
+                        num_images_per_prompt=data.num_samples,
+                        output_type="latent")
+            i2i = SDXL_T2I_Pipeline(base)
+
+            hr_latents = torch.functional.interpolate(lr_latents, scale_factor=data.hrfix_scale, mode="nearest")
+
+            images = i2i.infer(
+                        prompt=data.text,
+                        negative_prompt=data.negative_prompt,
+                        image=hr_latents,
+                        num_inference_steps=int(data.num_steps*data.hrfix_steps_ratio),
+                        guidance_scale=data.guidance_scale, 
+                        strength=data.hrfix_strength,
+                        generator=generator,
+                        num_images_per_prompt=data.num_samples)
+    else:
+        if "canny" in data.control[0]:
+            pipe = SDXL_T2I_CN_Pipeline(base, "control_canny")
+        elif "zoe" in data.control[0]:
+            pipe = SDXL_T2I_CN_Pipeline(base, "control_zoe")
+        image_hint = url2img(data.control_hint[0])
+        print(np.array(image_hint).shape)
         images = pipe.infer(
                     prompt=data.text,
                     negative_prompt=data.negative_prompt,
@@ -33,31 +75,14 @@ def txt2img(base, data):
                     num_inference_steps=data.num_steps,
                     guidance_scale=data.guidance_scale, 
                     generator=generator,
-                    num_images_per_prompt=data.num_samples)
-    else:
-        lr_latents = pipe.infer(
-                    prompt=data.text,
-                    negative_prompt=data.negative_prompt,
-                    height=data.h,
-                    width=data.w,
-                    num_inference_steps=data.num_steps,
-                    guidance_scale=data.guidance_scale, 
-                    generator=generator,
                     num_images_per_prompt=data.num_samples,
-                    output_type="latent")
-        i2i = SDXL_T2I_Pipeline(base)
-
-        hr_latents = torch.functional.interpolate(lr_latents, scale_factor=data.hrfix_scale, mode="nearest")
-
-        images = i2i.infer(
-                    prompt=data.text,
-                    negative_prompt=data.negative_prompt,
-                    image=hr_latents,
-                    num_inference_steps=int(data.num_steps*data.hrfix_steps_ratio),
-                    guidance_scale=data.guidance_scale, 
-                    strength=data.hrfix_strength,
-                    generator=generator,
-                    num_images_per_prompt=data.num_samples)
+                    image=image_hint,
+                    controlnet_conditioning_scale=data.control_strength[0],
+                    control_guidance_start=data.control_hint_start[0],
+                    control_guidance_end=data.control_hint_end[0],
+                    lowvram=True,
+                    )
+        pipe.unload()
     
     images_str = img2str(images)
     return images_str

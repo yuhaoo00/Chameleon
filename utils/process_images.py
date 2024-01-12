@@ -1,9 +1,19 @@
 import io
 import base64
+import requests
 import numpy as np
 from PIL import Image
 from cftool.cv import ImageBox
 
+def url2img(url):
+    response = requests.get(url)
+    if response.status_code == 200:
+        img_data = io.BytesIO(response.content)
+        img = Image.open(img_data)   
+        return img
+    else:
+        print(f"Failed to download image. Status code: {response.status_code}")
+        return None
 
 def img2str(imgs):
     if isinstance(imgs, Image.Image):

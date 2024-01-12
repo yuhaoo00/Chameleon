@@ -16,7 +16,7 @@ common_group_styles = dict(w=180, h=110)
 w_field = INumberField(
     default=512,
     min=512,
-    max=1280,
+    max=1024,
     step=64,
     isInt=True,
     label=I18N(
@@ -195,16 +195,19 @@ controlnet_fields = OrderedDict(
             label=I18N(zh="参考图类型", en="Hint Type"),
         ),
     hint_url=IImageField(default="", label=I18N(zh="参考图", en="Hint Image")),
-    skip_annotator=IBooleanField(
-            default=False,
-            label=I18N(zh="跳过预处理器", en="Skip Annotator"),
-        ),
     hint_start=INumberField(
         default=0.0,
         min=0.0,
         max=1.0,
         step=0.01,
         label=I18N(zh="参考图生效时机", en="Hint Start"),
+    ),
+    hint_end=INumberField(
+        default=1.0,
+        min=0.0,
+        max=1.0,
+        step=0.01,
+        label=I18N(zh="参考图失效时机", en="Hint End"),
     ),
     control_strength=INumberField(
         default=1.0,

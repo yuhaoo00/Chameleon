@@ -8,8 +8,8 @@ import argparse
 import tensorrt as trt
 from fastapi import FastAPI
 
-from pipelines.engine import TRT_LOGGER
 from pipelines.trt_sdxl_base import SD_TRT
+from pipelines.engine import TRT_LOGGER
 from generate import txt2img, img2img, upscale, inpaint, demofusion
 from utils import torch_gc, Inputdata, Outputdata, Inputdata_upscale, Inputdata_inpaint, Inputdata_demofusion
 
@@ -104,12 +104,14 @@ async def sd_demofusion(request: Inputdata_demofusion) -> Outputdata:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="API for Stable Diffusion (TensorRT)")
-    parser.add_argument('--config', type=str, default="/work/Stable_Diffusion_GPU_Deploy/configs/sdxl.yaml")
+    #parser.add_argument('--config', type=str, default="/work/Stable_Diffusion_GPU_Deploy/configs/sdxl.yaml")
     parser.add_argument('--host', type=str, default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8000)
     parser.add_argument('--workers', type=int, default=1)
     args = parser.parse_args()
 
+    """
+    from pipelines.trt_sdxl_base_old import SD_TRT
     with open(args.config, 'r') as f:
         config = yaml.safe_load(f)
 
@@ -117,11 +119,24 @@ if __name__ == '__main__':
     ctypes.cdll.LoadLibrary(config['TRT_build']['static_plugin_sofile'])
 
     sdbase = SD_TRT(
-            hf_dir=config['pipe_dir']['hf_dir'],
+            pipe_dir=config['pipe_dir']['hf_dir'],
             engine_dir=config['pipe_dir']['onnx_opt_dir'],
             vae_dir="/work/CKPTS/madebyollin--sdxl-vae-fp16-fix",
             engine_config=config['TRT_build']['input_shapes']['unet'],
-            enable_dynamic_shape=config['TRT_build']['enable_dynamic_shape'])
+            enable_dynamic_shape=config['TRT_build']['enable_dynamic_shape'])"""
+    
+    import config
+
+    trt.init_libnvinfer_plugins(TRT_LOGGER, '')
+    ctypes.cdll.LoadLibrary(config.static_plugin_sofile)
+    sdbase = SD_TRT(
+        pipe_dir=config.pipe_dir,
+        engine_dir=config.save_dir,
+        vae_dir=config.vae_dir,
+        engine_config=config.dynamic_input_shapes,
+        enable_dynamic_shape=True,
+    )
+
     
     sdbase.activateEngines()
 

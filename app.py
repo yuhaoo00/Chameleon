@@ -159,7 +159,7 @@ class Txt2Img(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        control, control_hint, control_hint_skip, control_hint_start, control_strength = parser_controlnet(data.extraData["control"])
+        control, control_hint, control_hint_start, control_hint_end, control_strength = parser_controlnet(data.extraData["control"])
 
         data_to_send = {
             "text": data.extraData["text"],
@@ -175,8 +175,8 @@ class Txt2Img(IFieldsPlugin):
             "hrfix_strength": data.extraData["highres_strength"] if data.extraData["use_highres"] else None,
             "control": control,
             "control_hint": control_hint,
-            "control_hint_skip": control_hint_skip,
             "control_hint_start": control_hint_start,
+            "control_hint_end": control_hint_end,
             "control_strength": control_strength,
         }
 

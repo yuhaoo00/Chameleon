@@ -20,6 +20,7 @@ class Inputdata(BaseModel):
     control_hint: Optional[Union[str, List[str]]] = None
     control_hint_skip: Optional[Union[bool, List[bool]]] = None
     control_hint_start: Optional[Union[float, List[float]]] = None
+    control_hint_end: Optional[Union[float, List[float]]] = None
     control_strength: Optional[Union[float, List[float]]] = None
 
 class Outputdata(BaseModel):

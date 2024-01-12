@@ -11,17 +11,17 @@ def torch_gc():
 def parser_controlnet(controls_list):
     types = []
     hints = []
-    hints_skip = []
     hints_start = []
+    hints_end = []
     strengths = []
 
     if controls_list:
         for ci in controls_list:
             types.append(ci["type"])
             hints.append(ci["hint_url"])
-            hints_skip.append(ci["skip_annotator"])
             hints_start.append(ci["hint_start"])
+            hints_end.append(ci["hint_end"])
             strengths.append(ci["control_strength"])
         
-    return types, hints, hints_skip, hints_start, strengths
+    return types, hints, hints_start, hints_end, strengths
 

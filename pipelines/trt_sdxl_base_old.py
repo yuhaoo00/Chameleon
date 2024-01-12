@@ -3,7 +3,6 @@ import pathlib
 import inspect
 import torch
 from cuda import cudart
-from time import time
 from typing import Optional, List, Union, Tuple, Any, Dict
 
 from transformers import CLIPTokenizer, CLIPTextModel, CLIPTextModelWithProjection
@@ -37,9 +36,6 @@ class SD_TRT:
         if not engine_dir.exists():
             RuntimeError(f"The passed \'engine_dir\' is an invalid path!")
 
-        self.pipe_dir = pipe_dir
-        self.engine_dir = engine_dir
-
         self.device = torch.device(device)
 
         self.shared_device_memory = None
@@ -47,23 +43,16 @@ class SD_TRT:
         self.enable_dynamic_shape = enable_dynamic_shape
         self.use_cuda_graph = not enable_dynamic_shape
 
-        # create Evens and Streams
-        _, self.stream = cudart.cudaStreamCreate()
-        _, self.stream_cn = cudart.cudaStreamCreate()
-        _, self.event = cudart.cudaEventCreate()
-        _, self.event_cn = cudart.cudaEventCreate()
+        # initialized in loadResources()
+        self.stream = None
 
         # load Engines
-        self.engines = {
-            "unet_encoder": EngineWrapper(engine_dir/"unet_encoder.plan"),
-            "unet_decoder": EngineWrapper(engine_dir/"unet_decoder.plan")
-        }
-        self.engines["unet_encoder"].load()
-        self.engines["unet_decoder"].load()
+        self.unet_engine = EngineWrapper(engine_dir/"unet_dy.plan")
+        self.unet_engine.load()
 
         # load Tokenizer
-        self.tokenizer = CLIPTokenizer.from_pretrained(pipe_dir/"tokenizer")
-        self.tokenizer_2 = CLIPTokenizer.from_pretrained(pipe_dir/"tokenizer_2")
+        self.tokenizer = CLIPTokenizer.from_pretrained(engine_dir/"tokenizer")
+        self.tokenizer_2 = CLIPTokenizer.from_pretrained(engine_dir/"tokenizer_2")
 
         # load Text_encoder
         self.text_encoder = CLIPTextModel.from_pretrained(pipe_dir/"text_encoder", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
@@ -82,65 +71,36 @@ class SD_TRT:
         # load Scheduler
         self.scheduler_config = pipe_dir/"scheduler"
         self.scheduler = getattr(importlib.import_module("diffusers"), scheduler_class).from_pretrained(self.scheduler_config)
-
-    def calculateMaxDeviceMemory(self):
-        max_device_memory = 0
-        for model_name, engine in self.engines.items():
-            max_device_memory = max(max_device_memory, engine.engine.device_memory_size)
-        return max_device_memory
     
     def activateEngines(self, shared_device_memory=None):
-        if self.shared_device_memory:
-            cudart.cudaFree(self.shared_device_memory)
-
         if shared_device_memory is None:
-            max_device_memory = self.calculateMaxDeviceMemory()
-            _, shared_device_memory = cudart.cudaMalloc(max_device_memory)
+            _, shared_device_memory = cudart.cudaMalloc(self.unet_engine.engine.device_memory_size)
         self.shared_device_memory = shared_device_memory
-        for engine in self.engines.values():
-            engine.activate(reuse_device_memory=self.shared_device_memory)
+        # Load and activate TensorRT engines
+        self.unet_engine.activate(reuse_device_memory=self.shared_device_memory)
 
     def loadResources(self, image_height, image_width, batch_size, do_cfg):
+        err, self.stream = cudart.cudaStreamCreate()
         # Allocate buffers for TensorRT engine bindings
-        for model_name in self.engines.keys():
-            build_shape = self.engine_config[model_name]
-            cur_shape = {}
-            for k, v in build_shape.items():
-                tmp = list(v[1])
-                if k not in ["timestep", "conditioning_scale"]: #constant input
-                    tmp[0] = batch_size*2 if do_cfg else batch_size
-                
-                if k in ["sample", "down00", "down01", "down02"]:
-                    tmp[2], tmp[3] = image_height//self.vae_scale_factor, image_width//self.vae_scale_factor
-                elif k in ["down10", "down11", "down12"]:
-                    tmp[2], tmp[3] = image_height//self.vae_scale_factor//2, image_width//self.vae_scale_factor//2
-                elif k in ["down20", "down21", "down22", "mid"]:
-                    tmp[2], tmp[3] = image_height//self.vae_scale_factor//4, image_width//self.vae_scale_factor//4
-                
-                cur_shape[k] = tuple(tmp)
-            self.engines[model_name].allocate_buffers(cur_shape, device=self.device)
+        input_shape = {}
+        for k, v in self.engine_config.items():
+            tmp = v['opt']
+            if k != 'timestep':
+                tmp[0] = batch_size*2 if do_cfg else batch_size
+            if k == 'sample':
+                tmp[2], tmp[3] = image_height//self.vae_scale_factor, image_width//self.vae_scale_factor
+            input_shape[k] = tuple(tmp)
+                    
+        self.unet_engine.allocate_buffers(input_shape, device=self.device)
 
     def teardown(self):
-        for eng in self.engines.values():
-            eng.__del__()
+        del self.unet_engine
 
         if self.shared_device_memory:
             cudart.cudaFree(self.shared_device_memory)
 
         cudart.cudaStreamDestroy(self.stream)
         del self.stream
-
-        cudart.cudaStreamDestroy(self.stream_cn)
-        del self.stream_cn
-
-        cudart.cudaEventDestroy(self.event)
-        del self.event
-
-        cudart.cudaEventDestroy(self.event_cn)
-        del self.event_cn
-
-        torch.cuda.empty_cache()
-        torch.cuda.ipc_collect()
 
     # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
     def enable_vae_slicing(self):
@@ -174,6 +134,14 @@ class SD_TRT:
         computing decoding in one step.
         """
         self.vae.disable_tiling()
+
+    def initialize_latents(self, batch_size, unet_channels, latent_height, latent_width, generator):
+        latents_shape = (batch_size, unet_channels, latent_height, latent_width)
+        latents = randn_tensor(latents_shape, generator=generator, device=self.device, dtype=torch.float16)
+        #latents = torch.randn(latents_shape, device=self.device, dtype=torch.float16, generator=generator)
+        # Scale the initial noise by the standard deviation required by the scheduler
+        latents = latents * self.scheduler.init_noise_sigma
+        return latents
     
     def prepare_extra_step_kwargs(self, generator, eta):
         accepts_eta = "eta" in set(inspect.signature(self.scheduler.step).parameters.keys())
@@ -354,7 +322,7 @@ class SD_TRT:
         add_text_embeds,
         add_time_ids,
         eta=0.0,
-        guidance_scale=7.5,):
+        guidance_scale=7.5):
 
         do_cfg = guidance_scale > 1.0
 
@@ -368,25 +336,13 @@ class SD_TRT:
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
             # Predict the noise residual
-            trtTimeStart = time()
             params = {
-                "sample": latent_model_input,
-                "timestep": timestep.reshape(-1).half(),
+                "sample": latent_model_input, 
+                "timestep": timestep.reshape(-1).half(), 
                 "encoder_hidden_states": text_embeddings,
                 "add_text_embeds": add_text_embeds,
-                "add_time_ids": add_time_ids
-            }
-            
-            out = self.engines["unet_encoder"].infer(params, self.stream, use_cuda_graph=self.use_cuda_graph)
-            trtTimeEnd = time()
-            print("Control+UnetEncoder = %6.3fms" % ((trtTimeEnd - trtTimeStart) * 1000))
-
-            params_decoder = {"encoder_hidden_states": text_embeddings}
-            for name, outdata in out.items():
-                if name not in params.keys(): # downs + mid + emb
-                    params_decoder[name] = outdata
-
-            noise_pred = self.engines["unet_decoder"].infer(params_decoder, self.stream, use_cuda_graph=self.use_cuda_graph)['out_sample']
+                "add_time_ids": add_time_ids,}
+            noise_pred = self.unet_engine.infer(params, self.stream, use_cuda_graph=self.use_cuda_graph)['out_sample']
 
             # perform guidance
             if do_cfg:
