@@ -77,6 +77,10 @@ class EngineWrapper():
         del self.engine
         del self.context
         del self.tensors
+        self.engine = None
+        self.context = None
+        self.tensors = OrderedDict()
+
 
     def refit(self, onnx_path, onnx_refit_path):
         def convert_int64(arr):
@@ -186,6 +190,9 @@ class EngineWrapper():
         self.engine = engine_from_bytes(bytes_from_path(self.engine_path))
 
     def activate(self, reuse_device_memory=None):
+        if self.context:
+            del self.context
+
         if reuse_device_memory:
             self.context = self.engine.create_execution_context_without_device_memory()
             self.context.device_memory = reuse_device_memory
@@ -218,66 +225,14 @@ class EngineWrapper():
                 CUASSERT(cudart.cudaStreamSynchronize(stream))
             else:
                 # do inference before CUDA graph capture
-                noerror = self.context.execute_async_v3(stream)
-                if not noerror:
-                    raise ValueError(f"ERROR: inference failed.")
+                self.context.execute_async_v3(stream)
                 # capture cuda graph
                 CUASSERT(cudart.cudaStreamBeginCapture(stream, cudart.cudaStreamCaptureMode.cudaStreamCaptureModeGlobal))
                 self.context.execute_async_v3(stream)
                 self.graph = CUASSERT(cudart.cudaStreamEndCapture(stream))
                 self.cuda_graph_instance = CUASSERT(cudart.cudaGraphInstantiate(self.graph, b"", 0))
         else:
-            noerror = self.context.execute_async_v3(stream)
-            if not noerror:
-                raise ValueError(f"ERROR: inference failed.")
+            self.context.execute_async_v3(stream)
 
         return self.tensors
-
-
-def save_image(images, image_path_dir, image_name_prefix):
-    """
-    Save the generated images to png files.
-    """
-    images = ((images + 1) * 255 / 2).clamp(0, 255).detach().permute(0, 2, 3, 1).round().type(torch.uint8).cpu().numpy()
-    for i in range(images.shape[0]):
-        image_path  = os.path.join(image_path_dir, image_name_prefix+str(i+1)+'-'+str(random.randint(1000,9999))+'.png')
-        print(f"Saving image {i+1} / {images.shape[0]} to: {image_path}")
-        Image.fromarray(images[i]).save(image_path)
-
-def preprocess_image(image):
-    """
-    image: torch.Tensor
-    """
-    w, h = image.size
-    w, h = map(lambda x: x - x % 32, (w, h))  # resize to integer multiple of 32
-    image = image.resize((w, h))
-    image = np.array(image).astype(np.float32) / 255.0
-    image = image[None].transpose(0, 3, 1, 2)
-    image = torch.from_numpy(image).contiguous()
-    return 2.0 * image - 1.0
-
-def prepare_mask_and_masked_image(image, mask):
-    """
-    image: PIL.Image.Image
-    mask: PIL.Image.Image
-    """
-    if isinstance(image, Image.Image):
-        image = np.array(image.convert("RGB"))
-    image = image[None].transpose(0, 3, 1, 2)
-    image = torch.from_numpy(image).to(dtype=torch.float32).contiguous() / 127.5 - 1.0
-    if isinstance(mask, Image.Image):
-        mask = np.array(mask.convert("L"))
-        mask = mask.astype(np.float32) / 255.0
-    mask = mask[None, None]
-    mask[mask < 0.5] = 0
-    mask[mask >= 0.5] = 1
-    mask = torch.from_numpy(mask).to(dtype=torch.float32).contiguous()
-
-    masked_image = image * (mask < 0.5)
-
-    return mask, masked_image
-
-def download_image(url):
-    response = requests.get(url)
-    return Image.open(BytesIO(response.content)).convert("RGB")
 
