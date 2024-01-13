@@ -55,12 +55,11 @@ class ControlNetHED_Apache2(torch.nn.Module):
 
 
 class HEDdetector:
-    def __init__(self):
-        modelpath = "/mnt/Data/CodeML/SD/CKPTS/lllyasviel--Annotators/ControlNetHED.pth"
+    def __init__(self, modelpath="/mnt/Data/CodeML/SD/CKPTS/lllyasviel--Annotators/ControlNetHED.pth"):
         self.netNetwork = ControlNetHED_Apache2().float().cuda().eval()
         self.netNetwork.load_state_dict(torch.load(modelpath))
 
-    def __call__(self, input_image, safe=False):
+    def __call__(self, input_image, safe=False, *args, **kargs):
         input_image = np.asarray(input_image.convert("RGB"))
         assert input_image.ndim == 3
         H, W, C = input_image.shape

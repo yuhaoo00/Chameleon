@@ -36,6 +36,17 @@ dynamic_input_shapes = {
     "conditioning_scale": [[1],[1],[1]],
   },
 
+  "control_depth": {
+    "sample": [(bs, 4, h//8, w//8) for (bs, h, w) in zip(batch_size, height, width)],
+    "timestep": [[1],[1],[1]],
+    "encoder_hidden_states": [(bs, 77, 2048) for bs in batch_size],
+    "add_text_embeds": [(bs, 1280) for bs in batch_size],
+    "add_time_ids": [(bs, 6) for bs in batch_size],
+    "controlnet_cond": [(bs, 3, h, w) for (bs, h, w) in zip(batch_size, height, width)],
+    "conditioning_scale": [[1],[1],[1]],
+  },
+
+
   "unet_encoder": {
     "sample": [(bs, 4, h//8, w//8) for (bs, h, w) in zip(batch_size, height, width)],
     "timestep": [[1],[1],[1]],

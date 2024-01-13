@@ -66,3 +66,8 @@ class Inputdata_demofusion(BaseModel):
     sigma: Optional[float] = 0.8
     lowvram: Optional[bool] = True
 
+class Inputdata_anno(BaseModel):
+    type: str
+    image: str
+    low_threshold: Optional[int] = 100
+    high_threshold: Optional[int] = 200

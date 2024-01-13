@@ -190,7 +190,7 @@ canny_fields = OrderedDict(
 
 controlnet_fields = OrderedDict(
     type=ISelectField(
-            options=["canny", "zoe"],
+            options=["canny", "depth"],
             default="canny",
             label=I18N(zh="参考图类型", en="Hint Type"),
         ),
@@ -485,7 +485,7 @@ smart_fusing_fields = OrderedDict(
     ),
     cn_type=ISelectField(
         default="canny",
-        options=["canny", "soft edge", "zoe depth"],
+        options=["canny", "soft edge", "depth"],
         label=I18N(
             zh="ControlNet模型", 
             en="ControlNet Model"

@@ -8,19 +8,19 @@ import argparse
 import tensorrt as trt
 from fastapi import FastAPI
 
-from pipelines.trt_sdxl_base import SD_TRT
-from pipelines.engine import TRT_LOGGER
-from generate import txt2img, img2img, upscale, inpaint, demofusion
-from utils import torch_gc, Inputdata, Outputdata, Inputdata_upscale, Inputdata_inpaint, Inputdata_demofusion
+from src.pipelines import SD_TRT
+from src.pipelines.engine import TRT_LOGGER
+from src.generate import *
+from src.utils import *
 
 app = FastAPI()
 
 
 @app.post("/t2i")
-async def sd_t2i(request: Inputdata) -> Outputdata:
+async def t2i(request: Inputdata) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = txt2img(sdbase, request)
+    imgs_str = sd_t2i(sdbase, request)
 
     time2 = time.time()
     answer = Outputdata(
@@ -34,10 +34,10 @@ async def sd_t2i(request: Inputdata) -> Outputdata:
     return answer
 
 @app.post("/i2i")
-async def sd_i2i(request: Inputdata) -> Outputdata:
+async def i2i(request: Inputdata) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = img2img(sdbase, request)
+    imgs_str = sd_i2i(sdbase, request)
 
     time2 = time.time()
     answer = Outputdata(
@@ -51,10 +51,10 @@ async def sd_i2i(request: Inputdata) -> Outputdata:
     return answer
 
 @app.post("/upscale")
-async def nn_upscale(request: Inputdata_upscale) -> Outputdata:
+async def upscale(request: Inputdata_upscale) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = upscale(request)
+    imgs_str = nn_upscale(request)
 
     time2 = time.time()
     answer = Outputdata(
@@ -68,10 +68,10 @@ async def nn_upscale(request: Inputdata_upscale) -> Outputdata:
     return answer
 
 @app.post("/inpaint")
-async def sd_inpaint(request: Inputdata_inpaint) -> Outputdata:
+async def inpaint(request: Inputdata_inpaint) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = inpaint(sdbase, request)
+    imgs_str = sd_inpaint(sdbase, request)
 
     time2 = time.time()
     answer = Outputdata(
@@ -85,10 +85,10 @@ async def sd_inpaint(request: Inputdata_inpaint) -> Outputdata:
     return answer
 
 @app.post("/demofusion")
-async def sd_demofusion(request: Inputdata_demofusion) -> Outputdata:
+async def demofusion(request: Inputdata_demofusion) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = demofusion(sdbase, request)
+    imgs_str = sd_demofusion(sdbase, request)
 
     time2 = time.time()
     answer = Outputdata(
@@ -97,6 +97,23 @@ async def sd_demofusion(request: Inputdata_demofusion) -> Outputdata:
     )
 
     log = "#SD_DemoFusion " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    print(log)
+    torch_gc()
+    return answer
+
+@app.post("/get_hint")
+async def get_hint(request: Inputdata_anno) -> Outputdata:
+    time1 = time.time()
+
+    imgs_str = annotating(request)
+
+    time2 = time.time()
+    answer = Outputdata(
+        imgs=imgs_str,
+        time=round(time2-time1,8)
+    )
+
+    log = f"#Get_{request.type} " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
     print(log)
     torch_gc()
     return answer

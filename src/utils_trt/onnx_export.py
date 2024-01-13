@@ -15,14 +15,6 @@ class FrozenUnetEncoder(torch.nn.Module):
         self.net = UNet2DConditionModel
     
     def forward(self, sample, timestep, encoder_hidden_states, add_text_embeds, add_time_ids,):
-        default_overall_up_factor = 2**self.net.num_upsamplers
-
-        for dim in sample.shape[-2:]:
-            if dim % default_overall_up_factor != 0:
-                # Forward upsample size to force interpolation output size.
-                forward_upsample_size = True
-                break
-
         # 0. center input if necessary
         if self.net.config.center_input_sample:
             sample = 2 * sample - 1.0

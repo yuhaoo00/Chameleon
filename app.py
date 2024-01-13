@@ -2,18 +2,12 @@ import sys
 sys.path.append("/mnt/Data/CodeML/SD/Chameleon")
 import requests
 import numpy as np
-import cv2
 from PIL import Image
 from typing import List
 from cfdraw import *
-from utils.generate import *
-from utils.load import *
-from utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet
-from fields import *
-from extensions.annotators.hed import HEDdetector
-from extensions.annotators.zoe import ZoeDetector
-from extensions.annotators.canny import CannyDetector
-import utils.icon_paths as paths
+from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet
+from src.fields import *
+import src.icons as paths
 # plugins
 
 class Upscale(IFieldsPlugin):
@@ -50,89 +44,6 @@ class Upscale(IFieldsPlugin):
         imgs = str2img(response["imgs"])
         return imgs
 
-class Canny(IFieldsPlugin):
-    @property
-    def settings(self) -> IPluginSettings:
-        return IPluginSettings(
-            w=480,
-            h=250,
-            src=paths.EDGE_ICON,
-            tooltip=I18N(
-                zh="获取Canny图",
-                en="Get Canny",
-            ),
-            pluginInfo=IFieldsPluginInfo(
-                header=I18N(
-                    zh="获取Canny图",
-                    en="Get Canny",
-                ),
-                definitions=canny_fields,
-            ),
-        )
-
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData)
-
-        model = CannyDetector()
-        res = model(img, data.extraData["low_threshold"], data.extraData["high_threshold"])
-        return [res]
-
-class Zoe(IFieldsPlugin):
-    @property
-    def settings(self) -> IPluginSettings:
-        return IPluginSettings(
-            w=240,
-            h=110,
-            src=paths.DEPTH_ICON,
-            tooltip=I18N(
-                zh="获取Zoe图",
-                en="Get Zoe",
-            ),
-            pluginInfo=IFieldsPluginInfo(
-                header=I18N(
-                    zh="获取Zoe图",
-                    en="Get Zoe",
-                ),
-                definitions={},
-            ),
-        )
-
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData)
-
-        model = ZoeDetector()
-        res = model(img)
-        return [res]
-
-class Hed(IFieldsPlugin):
-    @property
-    def settings(self) -> IPluginSettings:
-        return IPluginSettings(
-            w=240,
-            h=110,
-            src=paths.SOFTEDGE_ICON,
-            tooltip=I18N(
-                zh="获取HED图",
-                en="Get HED",
-            ),
-            pluginInfo=IFieldsPluginInfo(
-                header=I18N(
-                    zh="获取HED图",
-                    en="Get HED",
-                ),
-                definitions={},
-            ),
-        )
-
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData)
-
-        model = HEDdetector()
-        res = model(img)
-        return [res]
 
 class Txt2Img(IFieldsPlugin):
     @property
@@ -329,39 +240,6 @@ class Inpainting(IFieldsPlugin):
         imgs = str2img(response["imgs"])
         return imgs
     
-class CNInpainting(IFieldsPlugin):
-    @property
-    def settings(self) -> IPluginSettings:
-        return IPluginSettings(
-            **common_styles,
-            src=paths.CNINPAINT_ICON,
-            tooltip=I18N(
-                zh="局部替换 (ControlNet)",
-                en="Inpainting (ControlNet)",
-            ),
-            pluginInfo=IFieldsPluginInfo(
-                header=I18N(
-                    zh="局部替换 (ControlNet)",
-                    en="Inpainting (ControlNet)",
-                ),
-                definitions=cn_inpainting_fields,
-            ),
-        )
-
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
-
-        url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
-        mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
-        img = await self.load_image(url_node.src)
-        img = img_transform(img, url_node)
-        mask = await self.load_image(mask_node.src)
-
-        pipe = get_controlnet("v11_sd15_inapint")
-        return cn_inpaint(pipe, img, mask, data, callback)
-
-
 class StyleTransfer(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
@@ -384,6 +262,7 @@ class StyleTransfer(IFieldsPlugin):
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
         def callback(step: int, *args) -> bool:
             return self.send_progress((step+1) / data.extraData["num_steps"])
+        return 
         
         img = await self.load_image(data.nodeData.src)
         img = img_transform(img, data.nodeData)
@@ -413,6 +292,7 @@ class Matting(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        return
 
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
@@ -456,6 +336,7 @@ class EasyFusing(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        return
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
         data0 = url_nodes[0]
         data1 = url_nodes[1]
@@ -490,6 +371,7 @@ class EdgeFusing(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        return
         def callback(step: int, *args) -> bool:
             return self.send_progress(step / data.extraData["num_steps"])
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
@@ -527,6 +409,7 @@ class SmartFusing(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        return
         def callback(step: int, *args) -> bool:
             return self.send_progress(step / data.extraData["num_steps"])
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
@@ -544,6 +427,109 @@ class SmartFusing(IFieldsPlugin):
         pipe = get_style_inpaint(data.extraData["version"], data.extraData["cn_type"])
         return smart_fusing(pipe, data, data0, data1, img0, img1, callback)
 
+
+class Canny(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=480,
+            h=250,
+            src=paths.EDGE_ICON,
+            tooltip=I18N(
+                zh="获取Canny图",
+                en="Get Canny",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取Canny图",
+                    en="Get Canny",
+                ),
+                definitions=canny_fields,
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
+        data_to_send = {
+            "type": "canny",
+            "image": img2str(img)[0],
+            "low_threshold": data.extraData["low_threshold"],
+            "high_threshold": data.extraData["high_threshold"],
+        }
+
+        response = requests.post('http://0.0.0.0:8000/get_hint', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
+
+
+class Depth(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=paths.DEPTH_ICON,
+            tooltip=I18N(
+                zh="获取深度图",
+                en="Get Depth",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取深度图",
+                    en="Get Depth",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
+        data_to_send = {
+            "type": "depth",
+            "image": img2str(img)[0],
+        }
+
+        response = requests.post('http://0.0.0.0:8000/get_hint', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
+
+
+class Hed(IFieldsPlugin):
+    @property
+    def settings(self) -> IPluginSettings:
+        return IPluginSettings(
+            w=240,
+            h=110,
+            src=paths.SOFTEDGE_ICON,
+            tooltip=I18N(
+                zh="获取HED图",
+                en="Get HED",
+            ),
+            pluginInfo=IFieldsPluginInfo(
+                header=I18N(
+                    zh="获取HED图",
+                    en="Get HED",
+                ),
+                definitions={},
+            ),
+        )
+
+    async def process(self, data: ISocketRequest) -> List[Image.Image]:
+        img = await self.load_image(data.nodeData.src)
+        img = img_transform(img, data.nodeData)
+
+        data_to_send = {
+            "type": "hed",
+            "image": img2str(img)[0],
+        }
+
+        response = requests.post('http://0.0.0.0:8000/get_hint', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
 
 # groups
 class StaticPlugins(IPluginGroup):
@@ -601,7 +587,7 @@ class ImageFollowers(IPluginGroup):
                     "demofusion": DemoFusion,
                     "canny": Canny,
                     "hed": Hed,
-                    "zoe": Zoe,
+                    "depth": Depth,
                     "upscale": Upscale,
                 },
             ),
@@ -635,7 +621,6 @@ class ImageAndMaskFollowers(IPluginGroup):
                 plugins={
                     "matting": Matting,
                     "inpainting": Inpainting,
-                    "cninpainting": CNInpainting,
                 },
             ),
         )

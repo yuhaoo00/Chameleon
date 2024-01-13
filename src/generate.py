@@ -1,14 +1,20 @@
 import torch
 import numpy as np
 from PIL import Image
-from pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion, SDXL_T2I_CN_Pipeline
-from utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image
+from .pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion, SDXL_T2I_CN_Pipeline
+from .utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image
 
 main_dir = "/work/CKPTS/"
 
 upscaler_paths = {
     "ESRGAN-general": main_dir+"Real-ESRGAN/RealESRGAN_x4plus.pth",
     "ESRGAN-anime": main_dir+"Real-ESRGAN/RealESRGAN_x4plus_anime_6B.pth",
+}
+
+annotator_paths = {
+    "hed": main_dir+"lllyasviel--Annotators/ControlNetHED.pth",
+    "zoe": main_dir+"lllyasviel--Annotators/ZoeD_M12_N.pt",
+    "depth": main_dir+"lllyasviel--Annotators/dpt_hybrid-midas-501f0c75.pt",
 }
 
 def get_generator(seed):
@@ -20,7 +26,7 @@ def get_generator(seed):
     return generator
 
 
-def txt2img(base, data):
+def sd_t2i(base, data):
     generator = get_generator(data.seed)
 
     if not data.control:
@@ -65,6 +71,8 @@ def txt2img(base, data):
             pipe = SDXL_T2I_CN_Pipeline(base, "control_canny")
         elif "zoe" in data.control[0]:
             pipe = SDXL_T2I_CN_Pipeline(base, "control_zoe")
+        elif "depth" in data.control[0]:
+            pipe = SDXL_T2I_CN_Pipeline(base, "control_depth")
 
         image_hint = url2img(data.control_hint[0])
         print(np.array(image_hint).shape)
@@ -88,7 +96,7 @@ def txt2img(base, data):
     return images_str
 
 
-def img2img(base, data):
+def sd_i2i(base, data):
     pipe = SDXL_I2I_Pipeline(base)
     generator = get_generator(data.seed)
 
@@ -132,7 +140,7 @@ def img2img(base, data):
     return images_str
 
 
-def inpaint(base, data):
+def sd_inpaint(base, data):
     pipe = SDXL_Inpaint_Pipeline(base)
     generator = get_generator(data.seed)
 
@@ -164,7 +172,7 @@ def inpaint(base, data):
     return images_str
 
 
-def demofusion(base, data):
+def sd_demofusion(base, data):
     pipe = SDXL_DemoFusion(base)
     generator = get_generator(data.seed)
 
@@ -191,8 +199,8 @@ def demofusion(base, data):
     return images_str
 
 
-def upscale(data):
-    from extensions.realesrgan import RealESRGANer
+def nn_upscale(data):
+    from .extensions.realesrgan import RealESRGANer
     from basicsr.archs.rrdbnet_arch import RRDBNet
     
     image = str2img(data.image)[0]
@@ -214,4 +222,27 @@ def upscale(data):
 
     image_str = img2str(Image.fromarray(output))
     del model
+    return image_str
+
+
+def annotating(data):
+    from .extensions.annotators.canny import CannyDetector
+    from .extensions.annotators.hed import HEDdetector
+    from .extensions.annotators.zoe import ZoeDetector
+    from .extensions.annotators.depth import MidasDetector
+
+    if data.type == "canny":
+        anno = CannyDetector()
+    elif data.type == "hed":
+        anno = HEDdetector(annotator_paths[data.type])
+    elif data.type == "zoe":
+        anno = ZoeDetector(annotator_paths[data.type])
+    elif data.type == "depth":
+        anno = MidasDetector(annotator_paths[data.type])
+    else:
+        raise ValueError(f"Undefined Annotator: {data.type}")
+
+    image = str2img(data.image)[0]
+    image = anno(image, data.low_threshold, data.high_threshold)
+    image_str = img2str(image)
     return image_str

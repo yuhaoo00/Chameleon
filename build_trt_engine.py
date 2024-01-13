@@ -7,9 +7,7 @@ import ctypes
 import torch
 
 
-from utils.onnx_export import export_onnx
-from utils.onnx_optimize import optimize_onnx
-from utils.engine_export import export_engine
+from src.utils_trt import export_onnx, optimize_onnx, export_engine
 import config
 
 if __name__ == "__main__":

@@ -12,17 +12,15 @@ from .zoedepth.utils.config import get_config
 from PIL import Image
 
 class ZoeDetector:
-    def __init__(self):
-        modelpath = os.path.join("/mnt/Data/CodeML/SD/CKPTS/lllyasviel--Annotators/ZoeD_M12_N.pt")
+    def __init__(self, modelpath="/mnt/Data/CodeML/SD/CKPTS/lllyasviel--Annotators/ZoeD_M12_N.pt"):
         conf = get_config("zoedepth", "infer")
         model = ZoeDepth.build_from_config(conf)
-        model.load_state_dict(torch.load(modelpath)['model'])
-        model = model.cuda()
-        model.device = 'cuda'
+        model.load_state_dict(torch.load(modelpath)['model'], strict=False)
+        model.to("cuda")
         model.eval()
         self.model = model
 
-    def __call__(self, input_image):
+    def __call__(self, input_image, *args, **kargs):
         input_image = np.asarray(input_image.convert("RGB"))
         assert input_image.ndim == 3
         image_depth = input_image.copy()
