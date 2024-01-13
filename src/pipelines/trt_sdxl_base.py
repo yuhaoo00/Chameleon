@@ -361,6 +361,17 @@ class SD_TRT:
 
         extra_step_kwargs = self.prepare_extra_step_kwargs(generator, eta)
 
+        # constant inputs
+        constant_params = {
+            "encoder_hidden_states":text_embeddings, 
+            "add_text_embeds":add_text_embeds, 
+            "add_time_ids":add_time_ids, 
+        }
+        input_names = list(constant_params.keys()) + ["sample", "timestep"]
+
+        self.engines["unet_encoder"].load_buffers(constant_params)
+        self.engines["unet_decoder"].load_buffers(constant_params)
+
         for step_index, timestep in enumerate(timesteps):
             #timestep = torch.tensor([999.]).to(latents.device)
 
@@ -368,23 +379,18 @@ class SD_TRT:
             latent_model_input = torch.cat([latents] * 2) if do_cfg else latents
             latent_model_input = self.scheduler.scale_model_input(latent_model_input, timestep)
 
-            # Predict the noise residual
-            trtTimeStart = time()
-            params = {
+            # dynamic inputs
+            dynamic_params = {
                 "sample": latent_model_input,
                 "timestep": timestep.reshape(-1).half(),
-                "encoder_hidden_states": text_embeddings,
-                "add_text_embeds": add_text_embeds,
-                "add_time_ids": add_time_ids
             }
+            # Predict the noise residual
             
-            out = self.engines["unet_encoder"].infer(params, self.stream, use_cuda_graph=self.use_cuda_graph)
-            trtTimeEnd = time()
-            print("Control+UnetEncoder = %6.3fms" % ((trtTimeEnd - trtTimeStart) * 1000))
+            out = self.engines["unet_encoder"].infer(dynamic_params, self.stream, use_cuda_graph=self.use_cuda_graph)
 
-            params_decoder = {"encoder_hidden_states": text_embeddings}
+            params_decoder = {}
             for name, outdata in out.items():
-                if name not in params.keys(): # downs + mid + emb
+                if name not in input_names: # downs + mid + emb
                     params_decoder[name] = outdata
 
             noise_pred = self.engines["unet_decoder"].infer(params_decoder, self.stream, use_cuda_graph=self.use_cuda_graph)['out_sample']

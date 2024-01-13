@@ -25,3 +25,21 @@ def parser_controlnet(controls_list):
         
     return types, hints, hints_start, hints_end, strengths
 
+def parser_INodeData(nodedata):
+    if 'response' in nodedata.meta['data']: 
+        img_url = nodedata.meta['data']['response']['value']['url']
+    else:
+        img_url = nodedata.meta['data']['url']
+    
+    info = {
+        "img_url": img_url,
+        "z": nodedata.z,
+        "x": nodedata.x,
+        "y": nodedata.y,
+        "w": nodedata.w,
+        "h": nodedata.h,
+        "transform": [nodedata.transform.a,nodedata.transform.b,nodedata.transform.c,
+                      nodedata.transform.d,nodedata.transform.e,nodedata.transform.f,],
+        "text": nodedata.text,
+    }
+    return info

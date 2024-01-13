@@ -4,7 +4,7 @@ lora_dir = None
 vae_dir = "/work/CKPTS/madebyollin--sdxl-vae-fp16-fix"
 control_dir = {
   "control_canny": "/work/CKPTS/diffusers--controlnet-canny-sdxl-1.0",
-  "control_zoe": "/work/CKPTS/diffusers--controlnet-zoe-depth-sdxl-1.0"
+  "control_depth": "/work/CKPTS/diffusers--controlnet-depth-sdxl-1.0"
 }
 
 opset = 17
@@ -17,16 +17,6 @@ width = [512, 1024, 1024]
 
 dynamic_input_shapes = {
   "control_canny": {
-    "sample": [(bs, 4, h//8, w//8) for (bs, h, w) in zip(batch_size, height, width)],
-    "timestep": [[1],[1],[1]],
-    "encoder_hidden_states": [(bs, 77, 2048) for bs in batch_size],
-    "add_text_embeds": [(bs, 1280) for bs in batch_size],
-    "add_time_ids": [(bs, 6) for bs in batch_size],
-    "controlnet_cond": [(bs, 3, h, w) for (bs, h, w) in zip(batch_size, height, width)],
-    "conditioning_scale": [[1],[1],[1]],
-  },
-
-  "control_zoe": {
     "sample": [(bs, 4, h//8, w//8) for (bs, h, w) in zip(batch_size, height, width)],
     "timestep": [[1],[1],[1]],
     "encoder_hidden_states": [(bs, 77, 2048) for bs in batch_size],

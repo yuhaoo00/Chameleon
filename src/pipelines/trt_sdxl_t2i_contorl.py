@@ -137,49 +137,53 @@ class SDXL_T2I_CN_Pipeline:
             keep = 1.0 - float(i / len(timesteps) < control_guidance_start or (i + 1) / len(timesteps) > control_guidance_end)
             controlnet_keep.append(keep)
 
-        for i, timestep in enumerate(timesteps):
+
+        # constant inputs
+        constant_params = {
+            "encoder_hidden_states":text_embeddings, 
+            "add_text_embeds":add_text_embeds, 
+            "add_time_ids":add_time_ids, 
+            "controlnet_cond":image,
+        }
+        input_names = list(constant_params.keys()) + ["sample", "timestep", "conditioning_scale"]
+
+        self.base.engines["unet_encoder"].load_buffers(constant_params)
+        self.base.engines[self.controlnet_type].load_buffers(constant_params)
+        self.base.engines["unet_decoder"].load_buffers(constant_params)
+
+        for i, t in enumerate(timesteps):
             latent_model_input = torch.cat([latents] * 2) if do_cfg else latents
-            latent_model_input = self.base.scheduler.scale_model_input(latent_model_input, timestep)
+            latent_model_input = self.base.scheduler.scale_model_input(latent_model_input, t)
+
+            cond_scale = controlnet_conditioning_scale * controlnet_keep[i]
+
+            # dynamic inputs
+            dynamic_params = {
+                "sample": latent_model_input,
+                "timestep": t.reshape(-1).half(),
+                "conditioning_scale": cond_scale,
+            }
+            self.base.engines["unet_encoder"].load_buffers(dynamic_params)
+            self.base.engines[self.controlnet_type].load_buffers(dynamic_params)
 
             # Predict the noise residual
-            # Unet Encoder
+            # Unet Encoder + ContorlNet
             trtTimeStart = time()
 
             cudart.cudaEventRecord(self.base.event_cn, self.base.stream_cn)
             cudart.cudaStreamWaitEvent(self.base.stream, self.base.event_cn, cudart.cudaEventWaitDefault)
-            params = {
-                "sample": latent_model_input, 
-                "timestep": timestep.reshape(-1).half(), 
-                "encoder_hidden_states": text_embeddings,
-                "add_text_embeds": add_text_embeds,
-                "add_time_ids": add_time_ids
-            }
-            out = self.base.engines["unet_encoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)
+            self.base.engines["unet_encoder"].context.execute_async_v3(self.base.stream)
             cudart.cudaEventRecord(self.base.event, self.base.stream)
-
-            # ContorlNet
             cudart.cudaStreamWaitEvent(self.base.stream_cn, self.base.event, cudart.cudaEventWaitDefault)
-            cond_scale = controlnet_conditioning_scale * controlnet_keep[i]
-            controlnet_params = {
-                "controlnet_cond": image,
-                "conditioning_scale": cond_scale,
-            }
-            params.update(controlnet_params)
-            input_names = params.keys()
-
-            out_res = self.base.engines[self.controlnet_type].infer(params, self.base.stream_cn, use_cuda_graph=self.base.use_cuda_graph)
+            self.base.engines[self.controlnet_type].context.execute_async_v3(self.base.stream_cn)
             cudart.cudaEventRecord(self.base.event_cn, self.base.stream_cn)
-
             cudart.cudaEventSynchronize(self.base.event_cn)
-            trtTimeEnd = time()
-            print("Control+Encoder = %6.3fms" % ((trtTimeEnd - trtTimeStart) * 1000))
 
             # Unet Decoder
-            params = {"encoder_hidden_states": text_embeddings,
-                      "emb": out["emb"],}
-            for k in out_res.keys(): # inputs + downs + mid
+            params = {"emb": self.base.engines["unet_encoder"].tensors["emb"]}
+            for k in self.base.engines[self.controlnet_type].tensors.keys(): # inputs + downs + mid
                 if k not in input_names: # downs + mid
-                    params[k] = out[k] + out_res[k]
+                    params[k] = self.base.engines["unet_encoder"].tensors[k] + self.base.engines[self.controlnet_type].tensors[k]
 
             noise_pred = self.base.engines["unet_decoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
 
@@ -188,7 +192,10 @@ class SDXL_T2I_CN_Pipeline:
                 noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
                 noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
 
-            latents = self.base.scheduler.step(noise_pred, timestep, latents, **extra_step_kwargs, return_dict=False)[0]
+            latents = self.base.scheduler.step(noise_pred, t, latents, **extra_step_kwargs, return_dict=False)[0]
+
+            trtTimeEnd = time()
+            print("per step = %6.3fms" % ((trtTimeEnd - trtTimeStart) * 1000))
 
         return latents
 
@@ -318,8 +325,7 @@ class SDXL_T2I_CN_Pipeline:
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
-            if self.base.lowvram:
-                self.base.vae.to(self.base.device)
+            self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
                 self.base.upcast_vae()

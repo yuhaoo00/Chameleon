@@ -1,4 +1,4 @@
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict
 from pydantic import BaseModel
 
 class Inputdata(BaseModel):
@@ -71,3 +71,14 @@ class Inputdata_anno(BaseModel):
     image: str
     low_threshold: Optional[int] = 100
     high_threshold: Optional[int] = 200
+
+
+class Inputdata_matting(BaseModel):
+    image: str
+    mask: str
+
+
+class Inputdata_fusing(BaseModel):
+    type: str
+    info0: Dict
+    info1: Dict

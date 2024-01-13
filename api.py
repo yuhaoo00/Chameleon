@@ -118,6 +118,43 @@ async def get_hint(request: Inputdata_anno) -> Outputdata:
     torch_gc()
     return answer
 
+@app.post("/matting")
+async def matting(request: Inputdata_matting) -> Outputdata:
+    time1 = time.time()
+
+    imgs_str = sam_matting(request)
+
+    time2 = time.time()
+    answer = Outputdata(
+        imgs=imgs_str,
+        time=round(time2-time1,8)
+    )
+
+    log = f"#SAM_Matting " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    print(log)
+    torch_gc()
+    return answer
+
+
+@app.post("/fusing")
+async def fusing(request: Inputdata_fusing) -> Outputdata:
+    time1 = time.time()
+
+    if request.type == "easy":
+        imgs_str = easy_fusing(request)
+    
+    time2 = time.time()
+    answer = Outputdata(
+        imgs=imgs_str,
+        time=round(time2-time1,8)
+    )
+
+    log = f"#{request.type}_Fusing " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    print(log)
+    torch_gc()
+    return answer
+
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="API for Stable Diffusion (TensorRT)")

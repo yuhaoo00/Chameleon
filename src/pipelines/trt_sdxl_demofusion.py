@@ -378,8 +378,7 @@ class SDXL_DemoFusion:
 
             if not output_type == "latent":
                 # make sure the VAE is in float32 mode, as it overflows in float16
-                if self.base.lowvram:
-                    self.base.vae.to(self.base.device)
+                self.base.vae.to(self.base.device)
 
                 if self.base.needs_upcasting:
                     self.base.upcast_vae()
@@ -411,9 +410,7 @@ class SDXL_DemoFusion:
 
         ####################################################### Phase 2+ #####################################################
         for current_scale_num in range(1, scale_num + 1):
-            if self.base.lowvram:
-                latents = latents.to(self.base.device)
-                torch.cuda.empty_cache()
+            latents = latents.to(self.base.device)
             print("### Phase {} Denoising ###".format(current_scale_num))
             current_height = (
                 128 * self.base.vae_scale_factor * current_scale_num
@@ -736,8 +733,7 @@ class SDXL_DemoFusion:
                 if not output_type == "latent":
                     # make sure the VAE is in float32 mode, as it overflows in float16
 
-                    if self.base.lowvram:
-                        self.base.vae.to(self.base.device)
+                    self.base.vae.to(self.base.device)
 
                     if self.base.needs_upcasting:
                         self.base.upcast_vae()

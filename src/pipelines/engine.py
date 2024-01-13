@@ -210,14 +210,11 @@ class EngineWrapper():
             dtype = trt.nptype(self.engine.get_tensor_dtype(tensorName))
             tensor = torch.empty(tuple(shape), dtype=numpy_to_torch_dtype_dict[dtype]).to(device=device)
             self.tensors[tensorName] = tensor
+            self.context.set_tensor_address(tensorName, tensor.data_ptr())
 
-    def infer(self, feed_dict, stream, use_cuda_graph=False):
-        for name, buf in feed_dict.items():
-            self.tensors[name].copy_(buf)
-
-
-        for name, tensor in self.tensors.items():
-            self.context.set_tensor_address(name, tensor.data_ptr())
+    def infer(self, feed_dict=None, stream=0, use_cuda_graph=False):
+        if feed_dict:
+            self.load_buffers(feed_dict)
 
         if use_cuda_graph:
             if self.cuda_graph_instance is not None:
@@ -235,4 +232,10 @@ class EngineWrapper():
             self.context.execute_async_v3(stream)
 
         return self.tensors
+    
+    def load_buffers(self, feed_dict):
+        for name, buf in feed_dict.items():
+            if name in self.tensors.keys():
+                self.tensors[name].copy_(buf)
+    
 

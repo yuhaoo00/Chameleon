@@ -162,14 +162,14 @@ class SDXL_Inpaint_Pipeline:
                 "add_text_embeds": add_text_embeds,
                 "add_time_ids": add_time_ids}
             
-            out = self.base.engines["unet_encoder"].infer(params, self.stream, use_cuda_graph=self.use_cuda_graph)
+            out = self.base.engines["unet_encoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)
             
             params_decoder = {"encoder_hidden_states": text_embeddings}
             for name, outdata in out.items():
                 if name not in params.keys(): # downs + mid + emb
                     params_decoder[name] = outdata
 
-            noise_pred = self.base.engines["unet_decoder"].infer(params_decoder, self.stream, use_cuda_graph=self.use_cuda_graph)['out_sample']
+            noise_pred = self.base.engines["unet_decoder"].infer(params_decoder, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
 
             # perform guidance
             if do_cfg:
@@ -280,6 +280,8 @@ class SDXL_Inpaint_Pipeline:
 
         mask = self.mask_processor.preprocess(mask_image, height=height, width=width)
 
+        self.base.vae.to(self.base.device)
+
         latents, noise, image_latents = self.initialize_latents(
             batch_size*num_images_per_prompt,
             height,
@@ -328,8 +330,7 @@ class SDXL_Inpaint_Pipeline:
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
-            if self.base.lowvram:
-                self.base.vae.to(self.base.device)
+            self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
                 self.base.upcast_vae()

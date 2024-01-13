@@ -1,8 +1,9 @@
 import torch
 import numpy as np
+import math
 from PIL import Image
 from .pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion, SDXL_T2I_CN_Pipeline
-from .utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image
+from .utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image, mask_to_box, get_angle, rotate_xy
 
 main_dir = "/work/CKPTS/"
 
@@ -15,6 +16,10 @@ annotator_paths = {
     "hed": main_dir+"lllyasviel--Annotators/ControlNetHED.pth",
     "zoe": main_dir+"lllyasviel--Annotators/ZoeD_M12_N.pt",
     "depth": main_dir+"lllyasviel--Annotators/dpt_hybrid-midas-501f0c75.pt",
+}
+
+sam_paths = {
+    "mobile_sam": main_dir+"mobile_sam.pt",
 }
 
 def get_generator(seed):
@@ -228,15 +233,12 @@ def nn_upscale(data):
 def annotating(data):
     from .extensions.annotators.canny import CannyDetector
     from .extensions.annotators.hed import HEDdetector
-    from .extensions.annotators.zoe import ZoeDetector
     from .extensions.annotators.depth import MidasDetector
 
     if data.type == "canny":
         anno = CannyDetector()
     elif data.type == "hed":
         anno = HEDdetector(annotator_paths[data.type])
-    elif data.type == "zoe":
-        anno = ZoeDetector(annotator_paths[data.type])
     elif data.type == "depth":
         anno = MidasDetector(annotator_paths[data.type])
     else:
@@ -246,3 +248,69 @@ def annotating(data):
     image = anno(image, data.low_threshold, data.high_threshold)
     image_str = img2str(image)
     return image_str
+
+
+def sam_matting(data):
+    from .extensions.MobileSAM import sam_model_registry, SamPredictor
+    img = str2img(data.image)[0]
+    mask = str2img(data.mask)[0].convert("L")
+    box = mask_to_box(mask)
+
+    mobile_sam = sam_model_registry["vit_t"](checkpoint=sam_paths["mobile_sam"]).cuda()
+    mobile_sam.eval()
+    model = SamPredictor(mobile_sam)
+
+    model.set_image(np.array(img))
+    mask_fined = model.predict(box=box, multimask_output=False)[0][0,:]
+    img_masked = np.concatenate((np.array(img), (mask_fined[:,:,None]*255).astype(np.uint8)), axis=2)
+    img_masked = Image.fromarray(img_masked)
+    
+    image_str = img2str(img_masked)
+    return image_str
+
+
+def easy_fusing(data):
+    info0 = data.info0
+    info1 = data.info1
+
+    img0 = url2img(info0['img_url']).convert("RGBA")
+    img1 = url2img(info1['img_url']).convert("RGBA")
+
+    if info0['z'] > info1['z']:
+        info0, info1 = info1, info0
+        img0, img1 = img1, img0
+
+    theta0 = get_angle(info0['transform'][0], info0['transform'][2], info0['w'], info0['h'])
+    theta1 = get_angle(info1['transform'][0], info1['transform'][2], info1['w'], info1['h'])
+
+    img0 = img0.resize(size=[int(info0['w']), int(info0['h'])]).rotate(np.degrees(theta0), expand=True)
+    img1 = img1.resize(size=[int(info1['w']), int(info1['h'])]).rotate(np.degrees(theta1), expand=True)
+    
+    max_width0 = math.sqrt(info0['w']**2+info0['h']**2)
+    max_width1 = math.sqrt(info1['w']**2+info1['h']**2)
+    max_width = int(max_width0+max_width1)
+    new = Image.new("RGBA", [max_width, max_width], color=(0,0,0,0))
+
+    offset_x0, offset_y0 = rotate_xy(-info0['w']//2,-info0['h']//2,0,0,theta0) 
+    offset_x1, offset_y1 = rotate_xy(-info1['w']//2,-info1['h']//2,0,0,theta1) 
+
+    xx = min(info1['x'], info0['x'])
+    yy = min(info1['y'], info0['y'])
+    info0['x'] -= xx
+    info1['x'] -= xx
+    info0['y'] -= yy
+    info1['y'] -= yy
+    offset_x0, offset_y0 = rotate_xy(-info0['w']//2,-info0['h']//2,0,0,theta0) 
+    offset_x1, offset_y1 = rotate_xy(-info1['w']//2,-info1['h']//2,0,0,theta1) 
+    offset_x0 = int(offset_x0+img0.size[0]/2)
+    offset_y0 = int(img0.size[1]/2-offset_y0)
+    offset_x1 = int(offset_x1+img1.size[0]/2)
+    offset_y1 = int(img1.size[1]/2-offset_y1)
+
+    new.paste(img1, (info1['x']-offset_x1, info1['y']-offset_y1), mask=img1.getchannel("A"))
+    new.paste(img0, (info0['x']-offset_x0, info0['y']-offset_y0), mask=img0.getchannel("A"))
+
+    image_str = img2str(new)
+    return image_str
+
+

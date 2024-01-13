@@ -115,6 +115,11 @@ def get_angle(a,c,w,h):
         theta = -theta
     return theta
 
+def rotate_xy(x,y,xo,yo,theta):
+    x_ = (x-xo)*np.cos(theta) - (y-yo)*np.sin(theta) + xo
+    y_ = (x-xo)*np.sin(theta) + (y+yo)*np.cos(theta) + yo
+    return x_, y_
+
 def img_transform(img, data):
     if img.mode == "RGBA":
         alpha = img.getchannel("A")
@@ -131,3 +136,28 @@ def png_to_mask(mask):
     mask[mask >0] = 255
     mask = Image.fromarray(mask)
     return mask
+
+def mask_to_box(mask):
+    mask = np.array(mask)
+    h, w = mask.shape
+    mask_x = np.sum(mask, axis=0)
+    mask_y = np.sum(mask, axis=1)
+    x0, x1 = 0, w-1
+    y0, y1 = 0, h-1
+    while x0 < w:
+        if mask_x[x0] != 0:
+            break
+        x0 += 1
+    while x1 > -1:
+        if mask_x[x1] == 0:
+            break
+        x1 -= 1
+    while y0 < h:
+        if mask_y[y0] != 0:
+            break
+        y0 += 1
+    while y1 > -1:
+        if mask_y[y1] == 0:
+            break
+        y1 -= 1
+    return np.array([x0, y0, x1, y1])

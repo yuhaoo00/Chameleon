@@ -152,6 +152,7 @@ class SDXL_I2I_Pipeline:
         if self.base.lowvram:
             self.base.text_encoder.cpu()
             self.base.text_encoder_2.cpu()
+        self.base.vae.to(self.base.device)
         
         self.base.scheduler.set_timesteps(num_inference_steps, device=self.base.device)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
@@ -192,8 +193,7 @@ class SDXL_I2I_Pipeline:
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
-            if self.base.lowvram:
-                self.base.vae.to(self.base.device)
+            self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
                 self.base.upcast_vae()

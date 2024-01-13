@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from typing import List
 from cfdraw import *
-from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet
+from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData, rotate_xy, get_angle, url2img
 from src.fields import *
 import src.icons as paths
 # plugins
@@ -292,28 +292,22 @@ class Matting(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        return
-
         url_node = self.filter(data.nodeDataList, SingleNodeType.IMAGE)[0]
         mask_node = self.filter(data.nodeDataList, SingleNodeType.PATH)[0]
         img = await self.load_image(url_node.src)
         img = img_transform(img, url_node).convert("RGB")
         mask = await self.load_image(mask_node.src)
         mask = mask.convert("L")
-        box = mask_to_box(mask)
         
-        model = get_mSAM(data.extraData["version"])
-        model.set_image(np.array(img))
-        mask_fined = model.predict(box=box,
-                                    #mask_input=mask[None,:,:],
-                                    #point_coords=np.array([[463, 455]]),
-                                    #point_labels=np.array([1]),
-                                    multimask_output=False)[0][0,:]
-        
-        img_masked = np.concatenate((np.array(img), (mask_fined[:,:,None]*255).astype(np.uint8)), axis=2)
-        img_masked = Image.fromarray(img_masked)
+        data_to_send = {
+            "image": img2str(img)[0],
+            "mask": img2str(mask)[0],
+        }
 
-        return [img_masked]
+        response = requests.post('http://0.0.0.0:8000/matting', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
+
     
 class EasyFusing(IFieldsPlugin):
     @property
@@ -335,21 +329,39 @@ class EasyFusing(IFieldsPlugin):
             ),
         )
 
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        return
+    async def process(self, data: ISocketRequest) -> Image.Image:
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
-        data0 = url_nodes[0]
-        data1 = url_nodes[1]
-        if 'response' in data0.meta['data']: 
-            img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
-        else:
-            img0 = await self.load_image(data0.meta['data']['url'])
-        if 'response' in data1.meta['data']: 
-            img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
-        else:
-            img1 = await self.load_image(data1.meta['data']['url'])
 
-        return easy_fusing(data0, data1, img0, img1)[0]
+        info0 = parser_INodeData(url_nodes[0])
+        info1 = parser_INodeData(url_nodes[1])
+
+        img0 = url2img(info0['img_url']).convert("RGBA")
+        img1 = url2img(info1['img_url']).convert("RGBA")
+
+        if info0['z'] > info1['z']:
+            info0, info1 = info1, info0
+            img0, img1 = img1, img0
+
+        theta0 = get_angle(info0['transform'][0], info0['transform'][2], info0['w'], info0['h'])
+        theta1 = get_angle(info1['transform'][0], info1['transform'][2], info1['w'], info1['h'])
+
+        img0 = img0.resize(size=[int(info0['w']), int(info0['h'])])
+        img1 = img1.resize(size=[int(info1['w']), int(info1['h'])]).rotate(np.degrees(theta1), expand=True)
+        fused_img = img1.copy()
+
+
+        new = Image.new("RGBA", [int(max(info1['w'], info0['x']-info1['x']+info0['w'])), int(max(info1['h'], info0['y']-info1['y']+info0['h']))], color=(0,0,0,0))
+        new.paste(img0, (int(info0['x']-info1['x']), int(info0['y']-info1['y'])), mask=img0.getchannel("A"))
+    
+        new = new.rotate(np.degrees(theta0), center=[int(info0['x']-info1['x']), int(info0['y']-info1['y'])])
+
+        img0 = new.crop((0,0,info1['w'],info1['h']))
+
+        mask = img0.getchannel("A").convert("L")
+
+        fused_img.paste(img0, (0,0), mask=mask)
+
+        return fused_img
     
 class EdgeFusing(IFieldsPlugin):
     @property

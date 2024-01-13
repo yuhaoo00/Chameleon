@@ -122,8 +122,7 @@ class SDXL_T2I_Pipeline:
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
-            if self.base.lowvram:
-                self.base.vae.to(self.base.device)
+            self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
                 self.base.upcast_vae()
