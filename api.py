@@ -135,9 +135,8 @@ if __name__ == '__main__':
         vae_dir=config.vae_dir,
         engine_config=config.dynamic_input_shapes,
         enable_dynamic_shape=True,
+        lowvram=True,
     )
-
-    
     sdbase.activateEngines()
 
     uvicorn.run(app, host=args.host, port=args.port, workers=args.workers)

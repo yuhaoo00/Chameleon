@@ -30,6 +30,7 @@ class SDXL_T2I_CN_Pipeline:
         # unload controlnet engine to save MEM
         self.base.engines[self.controlnet_type].__del__()
         self.base.engines.pop(self.controlnet_type, None)
+        self.base.activateEngines()
 
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
@@ -159,7 +160,6 @@ class SDXL_T2I_CN_Pipeline:
             # ContorlNet
             cudart.cudaStreamWaitEvent(self.base.stream_cn, self.base.event, cudart.cudaEventWaitDefault)
             cond_scale = controlnet_conditioning_scale * controlnet_keep[i]
-            print(cond_scale)
             controlnet_params = {
                 "controlnet_cond": image,
                 "conditioning_scale": cond_scale,
@@ -220,10 +220,8 @@ class SDXL_T2I_CN_Pipeline:
         crops_coords_top_left: Tuple[int, int] = (0, 0),
         target_size: Tuple[int, int] = None,
         clip_skip: Optional[int] = None,
-        lowvram: bool = False,
     ):
         # Define parameters
-        self.lowvram = lowvram
         if height is None: height = 1024 
         if width is None: width = 1024 
         if num_images_per_prompt is None: num_images_per_prompt = 1
@@ -238,7 +236,7 @@ class SDXL_T2I_CN_Pipeline:
         do_cfg = guidance_scale > 1.0
 
         # Encode prompt
-        if self.lowvram:
+        if self.base.lowvram:
             self.base.vae.cpu()
         
         self.base.text_encoder.to(self.base.device)
@@ -268,7 +266,7 @@ class SDXL_T2I_CN_Pipeline:
         
         del negative_prompt_embeds, negative_pooled_prompt_embeds
 
-        if self.lowvram:
+        if self.base.lowvram:
             self.base.text_encoder.cpu()
             self.base.text_encoder_2.cpu()
 
@@ -320,7 +318,7 @@ class SDXL_T2I_CN_Pipeline:
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
-            if self.lowvram:
+            if self.base.lowvram:
                 self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
@@ -334,7 +332,7 @@ class SDXL_T2I_CN_Pipeline:
             if self.base.needs_upcasting:
                 self.base.vae.to(dtype=torch.float16)
             
-            if self.lowvram:
+            if self.base.lowvram:
                 self.base.vae.cpu()
             
             images = self.base.image_processor.postprocess(images, output_type=output_type)

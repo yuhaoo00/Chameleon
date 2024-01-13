@@ -29,6 +29,7 @@ class SD_TRT:
         enable_dynamic_shape=True,
         device='cuda',
         scheduler_class="EulerDiscreteScheduler",
+        lowvram=False,
     ):
         pipe_dir = pathlib.Path(pipe_dir)
         engine_dir = pathlib.Path(engine_dir)
@@ -41,6 +42,7 @@ class SD_TRT:
         self.engine_dir = engine_dir
 
         self.device = torch.device(device)
+        self.lowvram = lowvram
 
         self.shared_device_memory = None
         self.engine_config = engine_config
@@ -66,14 +68,14 @@ class SD_TRT:
         self.tokenizer_2 = CLIPTokenizer.from_pretrained(pipe_dir/"tokenizer_2")
 
         # load Text_encoder
-        self.text_encoder = CLIPTextModel.from_pretrained(pipe_dir/"text_encoder", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
-        self.text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(pipe_dir/"text_encoder_2", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
+        self.text_encoder = CLIPTextModel.from_pretrained(pipe_dir/"text_encoder", torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
+        self.text_encoder_2 = CLIPTextModelWithProjection.from_pretrained(pipe_dir/"text_encoder_2", torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
 
         # load VAE_decoder
         if vae_dir is None:
-            self.vae = AutoencoderKL.from_pretrained(pipe_dir/"vae_1_0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16").to(self.device)
+            self.vae = AutoencoderKL.from_pretrained(pipe_dir/"vae_1_0", torch_dtype=torch.float16, use_safetensors=True, variant="fp16")
         else:
-            self.vae = AutoencoderKL.from_pretrained(vae_dir, torch_dtype=torch.float16, use_safetensors=True).to(self.device)
+            self.vae = AutoencoderKL.from_pretrained(vae_dir, torch_dtype=torch.float16, use_safetensors=True)
         self.needs_upcasting = (self.vae.dtype == torch.float16 and self.vae.config.force_upcast)
         self.vae_scale_factor = 2**(len(self.vae.config.block_out_channels)-1)
 
@@ -120,27 +122,26 @@ class SD_TRT:
                 cur_shape[k] = tuple(tmp)
             self.engines[model_name].allocate_buffers(cur_shape, device=self.device)
 
-    def teardown(self):
+    def unload(self):
         for eng in self.engines.values():
             eng.__del__()
-
-        if self.shared_device_memory:
-            cudart.cudaFree(self.shared_device_memory)
-
-        cudart.cudaStreamDestroy(self.stream)
-        del self.stream
-
-        cudart.cudaStreamDestroy(self.stream_cn)
-        del self.stream_cn
-
-        cudart.cudaEventDestroy(self.event)
-        del self.event
-
-        cudart.cudaEventDestroy(self.event_cn)
-        del self.event_cn
+        self.engines = {}
 
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
+    
+    def teardown(self):
+        self.unload()
+
+        cudart.cudaStreamDestroy(self.stream)
+        del self.stream
+        cudart.cudaStreamDestroy(self.stream_cn)
+        del self.stream_cn
+        cudart.cudaEventDestroy(self.event)
+        del self.event
+        cudart.cudaEventDestroy(self.event_cn)
+        del self.event_cn
+
 
     # Copied from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion.StableDiffusionPipeline.enable_vae_slicing
     def enable_vae_slicing(self):

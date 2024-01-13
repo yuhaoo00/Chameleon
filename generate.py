@@ -65,6 +65,7 @@ def txt2img(base, data):
             pipe = SDXL_T2I_CN_Pipeline(base, "control_canny")
         elif "zoe" in data.control[0]:
             pipe = SDXL_T2I_CN_Pipeline(base, "control_zoe")
+
         image_hint = url2img(data.control_hint[0])
         print(np.array(image_hint).shape)
         images = pipe.infer(
@@ -80,7 +81,6 @@ def txt2img(base, data):
                     controlnet_conditioning_scale=data.control_strength[0],
                     control_guidance_start=data.control_hint_start[0],
                     control_guidance_end=data.control_hint_end[0],
-                    lowvram=True,
                     )
         pipe.unload()
     
@@ -185,13 +185,10 @@ def demofusion(base, data):
                     cosine_scale_1=data.cosine_scale_1,
                     cosine_scale_2=data.cosine_scale_2,
                     cosine_scale_3=data.cosine_scale_3,
-                    sigma=data.sigma,
-                    lowvram=data.lowvram)
+                    sigma=data.sigma)
     
     images_str = img2str(images)
     return images_str
-
-
 
 
 def upscale(data):

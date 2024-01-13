@@ -104,11 +104,12 @@ class SDXL_I2I_Pipeline:
         original_size: Optional[Tuple[int, int]] = None,
         crops_coords_top_left: Tuple[int, int] = (0, 0),
         target_size: Optional[Tuple[int, int]] = None,
-        clip_skip: Optional[int] = None,):
+        clip_skip: Optional[int] = None):
 
+        if self.base.lowvram:
+            self.base.vae.cpu()
         self.base.text_encoder.to(self.base.device)
         self.base.text_encoder_2.to(self.base.device)
-        self.base.vae.to(self.base.device)
 
         if num_images_per_prompt is None: num_images_per_prompt = 1
 
@@ -147,6 +148,10 @@ class SDXL_I2I_Pipeline:
             pooled_prompt_embeds = torch.cat([negative_pooled_prompt_embeds, pooled_prompt_embeds], dim=0)
 
         del negative_prompt_embeds, negative_pooled_prompt_embeds
+
+        if self.base.lowvram:
+            self.base.text_encoder.cpu()
+            self.base.text_encoder_2.cpu()
         
         self.base.scheduler.set_timesteps(num_inference_steps, device=self.base.device)
         timesteps, num_inference_steps = self.get_timesteps(num_inference_steps, strength)
@@ -173,7 +178,6 @@ class SDXL_I2I_Pipeline:
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
         add_time_ids = torch.tensor([add_time_ids], dtype=prompt_embeds.dtype).repeat(batch_size*num_images_per_prompt, 1)
         add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0).to(self.base.device) if do_cfg else add_time_ids.to(self.base.device)
-        add_kwargs = {'add_text_embeds': pooled_prompt_embeds, 'add_time_ids': add_time_ids}
 
         latents = self.base.denoise_latent(
             latents=latents,
@@ -182,11 +186,14 @@ class SDXL_I2I_Pipeline:
             generator=generator,
             eta=eta,
             guidance_scale=guidance_scale,
-            add_kwargs=add_kwargs,
+            add_text_embeds=pooled_prompt_embeds,
+            add_time_ids=add_time_ids,
         )
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
+            if self.base.lowvram:
+                self.base.vae.to(self.base.device)
 
             if self.base.needs_upcasting:
                 self.base.upcast_vae()
@@ -198,6 +205,9 @@ class SDXL_I2I_Pipeline:
             # cast back to fp16 if needed
             if self.base.needs_upcasting:
                 self.base.vae.to(dtype=torch.float16)
+                
+            if self.base.lowvram:
+                self.base.vae.cpu()
             
             images = self.base.image_processor.postprocess(images, output_type=output_type)
         else:

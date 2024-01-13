@@ -1,18 +1,3 @@
-# Copyright 2023 The HuggingFace Team. All rights reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-from cuda import cudart
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 import matplotlib.pyplot as plt
 import torch
@@ -22,6 +7,7 @@ import torchvision
 from PIL import Image
 from tqdm.auto import tqdm
 from .trt_sdxl_base import SD_TRT
+from .engine import EngineWrapper
 
 from diffusers.utils.torch_utils import randn_tensor
 
@@ -142,7 +128,7 @@ class SDXL_DemoFusion:
         pad_size = sample_size // 4 * 3
         decoder_view_batch_size = 1
 
-        if self.lowvram:
+        if self.base.lowvram:
             core_stride = core_size // 2
             pad_size = core_size
 
@@ -232,7 +218,6 @@ class SDXL_DemoFusion:
         cosine_scale_3: Optional[float] = 1.0,
         sigma: Optional[float] = 1.0,
         show_image: bool = False,
-        lowvram: bool = False,
         image_lr: Optional[Image.Image] = None,
     ):
         # Default height and width to unet
@@ -259,11 +244,11 @@ class SDXL_DemoFusion:
         else:
             batch_size = prompt_embeds.shape[0]
 
-        self.lowvram = lowvram
-        if self.lowvram:
+        if self.base.lowvram:
             self.base.vae.cpu()
-            self.base.text_encoder.to(self.base.device)
-            self.base.text_encoder_2.to(self.base.device)
+            
+        self.base.text_encoder.to(self.base.device)
+        self.base.text_encoder_2.to(self.base.device)
 
         # 3. Encode input prompt
         self.base.loadResources(x1_size, x1_size, batch_size, do_cfg)
@@ -314,9 +299,8 @@ class SDXL_DemoFusion:
         output_images = []
 
         ############################################################### Phase 1 #################################################################
-        cudart.cudaEventRecord(self.base.events['denoise-start'], 0)
 
-        if self.lowvram:
+        if self.base.lowvram:
             self.base.text_encoder.cpu()
             self.base.text_encoder_2.cpu()
 
@@ -324,7 +308,7 @@ class SDXL_DemoFusion:
             if image_lr == None:
                 print("### Phase 1 Denoising ###")
                 for i, t in enumerate(timesteps):
-                    if self.lowvram:
+                    if self.base.lowvram:
                         self.base.vae.cpu()
 
                     latents_for_view = latents
@@ -340,8 +324,20 @@ class SDXL_DemoFusion:
                     )
 
                     # predict the noise residual
-                    params = {"sample": latent_model_input, "timestep": t.reshape(-1).half(), "encoder_hidden_states": prompt_embeds, "add_text_embeds": pooled_prompt_embeds, "add_time_ids": add_time_ids}
-                    noise_pred = self.base.unet_engine.infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
+                    params = {"sample": latent_model_input, 
+                              "timestep": t.reshape(-1).half(), 
+                              "encoder_hidden_states": prompt_embeds, 
+                              "add_text_embeds": pooled_prompt_embeds, 
+                              "add_time_ids": add_time_ids}
+                    
+                    out = self.base.engines["unet_encoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)
+
+                    params_decoder = {"encoder_hidden_states": prompt_embeds}
+                    for name, outdata in out.items():
+                        if name not in params.keys(): # downs + mid + emb
+                            params_decoder[name] = outdata
+
+                    noise_pred = self.base.engines["unet_decoder"].infer(params_decoder, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
 
                     # perform guidance
                     if do_cfg:
@@ -376,13 +372,13 @@ class SDXL_DemoFusion:
 
             anchor_mean = latents.mean()
             anchor_std = latents.std()
-            if self.lowvram:
+            if self.base.lowvram:
                 latents = latents.cpu()
                 torch.cuda.empty_cache()
 
             if not output_type == "latent":
                 # make sure the VAE is in float32 mode, as it overflows in float16
-                if self.lowvram:
+                if self.base.lowvram:
                     self.base.vae.to(self.base.device)
 
                 if self.base.needs_upcasting:
@@ -390,7 +386,7 @@ class SDXL_DemoFusion:
                     latents = latents.to(
                         next(iter(self.base.vae.post_quant_conv.parameters())).dtype
                     )
-                if self.lowvram and multi_decoder:
+                if self.base.lowvram and multi_decoder:
                     current_width_height = (
                         128 * self.base.vae_scale_factor
                     )
@@ -415,7 +411,7 @@ class SDXL_DemoFusion:
 
         ####################################################### Phase 2+ #####################################################
         for current_scale_num in range(1, scale_num + 1):
-            if self.lowvram:
+            if self.base.lowvram:
                 latents = latents.to(self.base.device)
                 torch.cuda.empty_cache()
             print("### Phase {} Denoising ###".format(current_scale_num))
@@ -527,8 +523,20 @@ class SDXL_DemoFusion:
                         add_time_ids_input = torch.cat(add_time_ids_input)
 
                         # predict the noise residual
-                        params = {"sample": latent_model_input, "timestep": t.reshape(-1).half(), "encoder_hidden_states": prompt_embeds_input, "add_text_embeds": add_text_embeds_input, "add_time_ids": add_time_ids_input}
-                        noise_pred = self.base.unet_engine.infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
+                        params = {"sample": latent_model_input, 
+                              "timestep": t.reshape(-1).half(), 
+                              "encoder_hidden_states": prompt_embeds_input, 
+                              "add_text_embeds": add_text_embeds_input, 
+                              "add_time_ids": add_time_ids_input}
+                    
+                        out = self.base.engines["unet_encoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)
+
+                        params_decoder = {"encoder_hidden_states": prompt_embeds_input}
+                        for name, outdata in out.items():
+                            if name not in params.keys(): # downs + mid + emb
+                                params_decoder[name] = outdata
+
+                        noise_pred = self.base.engines["unet_decoder"].infer(params_decoder, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
                         
 
                         if do_cfg:
@@ -657,8 +665,20 @@ class SDXL_DemoFusion:
 
 
                         # predict the noise residual
-                        params = {"sample": latent_model_input, "timestep": t.reshape(-1).half(), "encoder_hidden_states": prompt_embeds_input, 'add_text_embeds': add_text_embeds_input, 'add_time_ids': add_time_ids_input}
-                        noise_pred = self.base.unet_engine.infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
+                        params = {"sample": latent_model_input, 
+                              "timestep": t.reshape(-1).half(), 
+                              "encoder_hidden_states": prompt_embeds_input, 
+                              "add_text_embeds": add_text_embeds_input, 
+                              "add_time_ids": add_time_ids_input}
+                    
+                        out = self.base.engines["unet_encoder"].infer(params, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)
+
+                        params_decoder = {"encoder_hidden_states": prompt_embeds_input}
+                        for name, outdata in out.items():
+                            if name not in params.keys(): # downs + mid + emb
+                                params_decoder[name] = outdata
+
+                        noise_pred = self.base.engines["unet_decoder"].infer(params_decoder, self.base.stream, use_cuda_graph=self.base.use_cuda_graph)['out_sample']
 
                         if do_cfg:
                             noise_pred_uncond, noise_pred_text = (
@@ -710,13 +730,13 @@ class SDXL_DemoFusion:
                 latents = (
                     latents - latents.mean()
                 ) / latents.std() * anchor_std + anchor_mean
-                if self.lowvram:
+                if self.base.lowvram:
                     latents = latents.cpu()
                     torch.cuda.empty_cache()
                 if not output_type == "latent":
                     # make sure the VAE is in float32 mode, as it overflows in float16
 
-                    if self.lowvram:
+                    if self.base.lowvram:
                         self.base.vae.to(self.base.device)
 
                     if self.base.needs_upcasting:
@@ -752,7 +772,6 @@ class SDXL_DemoFusion:
                         plt.show()
                     output_images.append(image[0])
 
-        cudart.cudaEventRecord(self.base.events['denoise-stop'], 0)
         return output_images
     
     def preprocess_imglr(self, pil_image):

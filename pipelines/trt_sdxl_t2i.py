@@ -7,11 +7,13 @@ from .trt_sdxl_base import SD_TRT
 class SDXL_T2I_Pipeline:
     def __init__(self, base: SD_TRT):
         self.base = base
-        
 
-    def initialize_latents(self, batch_size, latent_height, latent_width, generator):
+    def initialize_latents(self, batch_size, latent_height, latent_width, generator, latents=None):
         latents_shape = (batch_size, 4, latent_height, latent_width)
-        latents = randn_tensor(latents_shape, generator=generator, device=self.base.device, dtype=torch.float16)
+        if latents is None:
+            latents = randn_tensor(latents_shape, generator=generator, device=self.base.device, dtype=torch.float16)
+        else:
+            latents = latents.to(self.base.device)
         latents = latents * self.base.scheduler.init_noise_sigma
         return latents
 
@@ -40,9 +42,10 @@ class SDXL_T2I_Pipeline:
         target_size: Optional[Tuple[int, int]] = None,
         clip_skip: Optional[int] = None,):
 
+        if self.base.lowvram:
+            self.base.vae.cpu()
         self.base.text_encoder.to(self.base.device)
         self.base.text_encoder_2.to(self.base.device)
-        self.base.vae.to(self.base.device)
 
         if height is None: height = 1024 
         if width is None: width = 1024 
@@ -87,11 +90,14 @@ class SDXL_T2I_Pipeline:
         
         del negative_prompt_embeds, negative_pooled_prompt_embeds
 
+        if self.base.lowvram:
+            self.base.text_encoder.cpu()
+            self.base.text_encoder_2.cpu()
+
         # Time embeddings
         add_time_ids = list(original_size + crops_coords_top_left + target_size)
         add_time_ids = torch.tensor([add_time_ids], dtype=prompt_embeds.dtype).repeat(batch_size*num_images_per_prompt, 1)
         add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0).to(self.base.device) if do_cfg else add_time_ids.to(self.base.device)
-        add_kwargs = {'add_text_embeds': pooled_prompt_embeds, 'add_time_ids': add_time_ids}
 
         self.base.scheduler.set_timesteps(num_inference_steps)
         timesteps = self.base.scheduler.timesteps
@@ -110,11 +116,15 @@ class SDXL_T2I_Pipeline:
             generator=generator,
             eta=eta,
             guidance_scale=guidance_scale,
-            add_kwargs=add_kwargs,
+            add_text_embeds=pooled_prompt_embeds,
+            add_time_ids=add_time_ids,
         )
 
         if not output_type == "latent":
             # make sure the VAE is in float32 mode, as it overflows in float16
+            if self.base.lowvram:
+                self.base.vae.to(self.base.device)
+
             if self.base.needs_upcasting:
                 self.base.upcast_vae()
             
@@ -125,6 +135,9 @@ class SDXL_T2I_Pipeline:
             # cast back to fp16 if needed
             if self.base.needs_upcasting:
                 self.base.vae.to(dtype=torch.float16)
+
+            if self.base.lowvram:
+                self.base.vae.cpu()
             
             images = self.base.image_processor.postprocess(images, output_type=output_type)
         else:

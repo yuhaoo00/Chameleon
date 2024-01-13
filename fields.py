@@ -190,7 +190,7 @@ canny_fields = OrderedDict(
 
 controlnet_fields = OrderedDict(
     type=ISelectField(
-            options=["canny", "depth"],
+            options=["canny", "zoe"],
             default="canny",
             label=I18N(zh="参考图类型", en="Hint Type"),
         ),
