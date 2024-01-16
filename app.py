@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from typing import List
 from cfdraw import *
-from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData, rotate_xy, get_angle, url2img
+from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData, get_angle, url2img
 from src.fields import *
 import src.icons as paths
 # plugins
@@ -287,7 +287,7 @@ class Matting(IFieldsPlugin):
                     zh="抠图",
                     en="Image Matting",
                 ),
-                definitions=matting_fields,
+                definitions={},
             ),
         )
 
@@ -309,21 +309,21 @@ class Matting(IFieldsPlugin):
         return imgs
 
     
-class EasyFusing(IFieldsPlugin):
+class EasyFusion(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             w=240,
             h=110,
-            src=paths.FUSING_ICON,
+            src=paths.FUSION_ICON,
             tooltip=I18N(
                 zh="直接融合",
-                en="Easy Fusing",
+                en="Easy Fusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
                     zh="直接融合",
-                    en="Easy Fusing",
+                    en="Easy Fusion",
                 ),
                 definitions={},
             ),
@@ -335,109 +335,59 @@ class EasyFusing(IFieldsPlugin):
         info0 = parser_INodeData(url_nodes[0])
         info1 = parser_INodeData(url_nodes[1])
 
-        img0 = url2img(info0['img_url']).convert("RGBA")
-        img1 = url2img(info1['img_url']).convert("RGBA")
-
-        if info0['z'] > info1['z']:
-            info0, info1 = info1, info0
-            img0, img1 = img1, img0
-
-        theta0 = get_angle(info0['transform'][0], info0['transform'][2], info0['w'], info0['h'])
-        theta1 = get_angle(info1['transform'][0], info1['transform'][2], info1['w'], info1['h'])
-
-        img0 = img0.resize(size=[int(info0['w']), int(info0['h'])])
-        img1 = img1.resize(size=[int(info1['w']), int(info1['h'])]).rotate(np.degrees(theta1), expand=True)
-        fused_img = img1.copy()
-
-
-        new = Image.new("RGBA", [int(max(info1['w'], info0['x']-info1['x']+info0['w'])), int(max(info1['h'], info0['y']-info1['y']+info0['h']))], color=(0,0,0,0))
-        new.paste(img0, (int(info0['x']-info1['x']), int(info0['y']-info1['y'])), mask=img0.getchannel("A"))
+        data_to_send = {
+            "info0": info0,
+            "info1": info1,
+        }
+        
+        response = requests.post('http://0.0.0.0:8000/fusion', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
     
-        new = new.rotate(np.degrees(theta0), center=[int(info0['x']-info1['x']), int(info0['y']-info1['y'])])
-
-        img0 = new.crop((0,0,info1['w'],info1['h']))
-
-        mask = img0.getchannel("A").convert("L")
-
-        fused_img.paste(img0, (0,0), mask=mask)
-
-        return fused_img
-    
-class EdgeFusing(IFieldsPlugin):
+class StyleFusion(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             **common_styles,
-            src=paths.EDGEFUSING_ICON,
+            src=paths.FUSION_PLUS_ICON,
             tooltip=I18N(
-                zh="边缘融合",
-                en="Edge Fusing",
+                zh="风格融合",
+                en="Style Fusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="边缘融合",
-                    en="Edge Fusing",
+                    zh="风格融合",
+                    en="Style Fusion",
                 ),
-                definitions=inpainting_fields,
+                definitions=sfusion_fields,
             ),
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        return
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
         url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
-        data0 = url_nodes[0]
-        data1 = url_nodes[1]
-        if 'response' in data0.meta['data']: 
-            img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
-        else:
-            img0 = await self.load_image(data0.meta['data']['url'])
-        if 'response' in data1.meta['data']: 
-            img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
-        else:
-            img1 = await self.load_image(data1.meta['data']['url'])
 
-        pipe = get_sd_inpaint(data.extraData["version"])
-        return edge_fusing(pipe, data, data0, data1, img0, img1, callback)
-    
-class SmartFusing(IFieldsPlugin):
-    @property
-    def settings(self) -> IPluginSettings:
-        return IPluginSettings(
-            **common_styles,
-            src=paths.BODYFUSING_ICON,
-            tooltip=I18N(
-                zh="智能融合",
-                en="Smart Fusing",
-            ),
-            pluginInfo=IFieldsPluginInfo(
-                header=I18N(
-                    zh="智能融合",
-                    en="Smart Fusing",
-                ),
-                definitions=smart_fusing_fields,
-            ),
-        )
+        info0 = parser_INodeData(url_nodes[0])
+        info1 = parser_INodeData(url_nodes[1])
 
-    async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        return
-        def callback(step: int, *args) -> bool:
-            return self.send_progress(step / data.extraData["num_steps"])
-        url_nodes = self.filter(data.nodeDataList, SingleNodeType.IMAGE)
-        data0 = url_nodes[0]
-        data1 = url_nodes[1]
-        if 'response' in data0.meta['data']: 
-            img0 = await self.load_image(data0.meta['data']['response']['value']['url'])
-        else:
-            img0 = await self.load_image(data0.meta['data']['url'])
-        if 'response' in data1.meta['data']: 
-            img1 = await self.load_image(data1.meta['data']['response']['value']['url'])
-        else:
-            img1 = await self.load_image(data1.meta['data']['url'])
-
-        pipe = get_style_inpaint(data.extraData["version"], data.extraData["cn_type"])
-        return smart_fusing(pipe, data, data0, data1, img0, img1, callback)
+        data_to_send = {
+            "info0": info0,
+            "info1": info1,
+            "text": data.extraData["text"],
+            "strength": data.extraData["strength"],
+            "num_steps": data.extraData["num_steps"],
+            "guidance_scale": data.extraData["guidance_scale"],
+            "seed": data.extraData["seed"],
+            "negative_prompt": data.extraData["negative_prompt"],
+            "num_samples": data.extraData["num_samples"],
+            "h": data.extraData["h"],
+            "w": data.extraData["w"],
+            "pad_strength": data.extraData["pad_strength"],
+            "blur_strength": data.extraData["blur_strength"],
+        }
+        
+        response = requests.post('http://0.0.0.0:8000/fusion_plus', json=data_to_send).json()
+        imgs = str2img(response["imgs"])
+        return imgs
 
 
 class Canny(IFieldsPlugin):
@@ -656,16 +606,15 @@ class ImagesFollowers(IPluginGroup):
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
                     zh="融合工具箱",
-                    en="Fusing Toolbox",
+                    en="Fusion Toolbox",
                 ),
                 header=I18N(
                     zh="融合工具箱",
-                    en="Fusing Toolbox",
+                    en="Fusion Toolbox",
                 ),
                 plugins={
-                    "easyfusing": EasyFusing,
-                    "edgefusing": EdgeFusing,
-                    "smartfusing": SmartFusing,
+                    "easyfusion": EasyFusion,
+                    "stylefusion": StyleFusion,
                 },
             ),
         )

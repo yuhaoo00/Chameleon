@@ -56,12 +56,8 @@ class SD_TRT:
         _, self.event_cn = cudart.cudaEventCreate()
 
         # load Engines
-        self.engines = {
-            "unet_encoder": EngineWrapper(engine_dir/"unet_encoder.plan"),
-            "unet_decoder": EngineWrapper(engine_dir/"unet_decoder.plan")
-        }
-        self.engines["unet_encoder"].load()
-        self.engines["unet_decoder"].load()
+        self.load()
+        self.activateEngines()
 
         # load Tokenizer
         self.tokenizer = CLIPTokenizer.from_pretrained(pipe_dir/"tokenizer")
@@ -122,11 +118,26 @@ class SD_TRT:
                 cur_shape[k] = tuple(tmp)
             self.engines[model_name].allocate_buffers(cur_shape, device=self.device)
 
+    def load(self):
+        torch.cuda.empty_cache()
+        torch.cuda.ipc_collect()
+
+        self.engines = {
+            "unet_encoder": EngineWrapper(self.engine_dir/"unet_encoder.plan"),
+            "unet_decoder": EngineWrapper(self.engine_dir/"unet_decoder.plan")
+        }
+        self.engines["unet_encoder"].load()
+        self.engines["unet_decoder"].load()
+
     def unload(self):
         for eng in self.engines.values():
             eng.__del__()
         self.engines = {}
 
+        if self.shared_device_memory:
+            cudart.cudaFree(self.shared_device_memory)
+            self.shared_device_memory = None
+        
         torch.cuda.empty_cache()
         torch.cuda.ipc_collect()
     

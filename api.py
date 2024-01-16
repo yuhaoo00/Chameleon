@@ -7,7 +7,7 @@ import ctypes
 import argparse
 import tensorrt as trt
 from fastapi import FastAPI
-
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from src.pipelines import SD_TRT
 from src.pipelines.engine import TRT_LOGGER
 from src.generate import *
@@ -136,12 +136,11 @@ async def matting(request: Inputdata_matting) -> Outputdata:
     return answer
 
 
-@app.post("/fusing")
-async def fusing(request: Inputdata_fusing) -> Outputdata:
+@app.post("/fusion")
+async def fusion(request: Inputdata_fusing) -> Outputdata:
     time1 = time.time()
 
-    if request.type == "easy":
-        imgs_str = easy_fusing(request)
+    imgs_str = easy_fusion(request)
     
     time2 = time.time()
     answer = Outputdata(
@@ -149,37 +148,44 @@ async def fusing(request: Inputdata_fusing) -> Outputdata:
         time=round(time2-time1,8)
     )
 
-    log = f"#{request.type}_Fusing " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    log = f"#Easy Fusion " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
     print(log)
     torch_gc()
     return answer
 
 
+@app.post("/fusion_plus")
+async def fusion_plus(request: Inputdata_fusing_plus) -> Outputdata:
+    time1 = time.time()
+
+    imgs_str = style_fusion(sdbase, tokenizer, vlmodel, request)
+    
+    time2 = time.time()
+    answer = Outputdata(
+        imgs=imgs_str,
+        time=round(time2-time1,8)
+    )
+
+    log = f"#Style Fusion " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
+    print(log)
+    torch_gc()
+    return answer
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="API for Stable Diffusion (TensorRT)")
-    #parser.add_argument('--config', type=str, default="/work/Stable_Diffusion_GPU_Deploy/configs/sdxl.yaml")
     parser.add_argument('--host', type=str, default='0.0.0.0')
     parser.add_argument('--port', type=int, default=8000)
     parser.add_argument('--workers', type=int, default=1)
     args = parser.parse_args()
 
-    """
-    from pipelines.trt_sdxl_base_old import SD_TRT
-    with open(args.config, 'r') as f:
-        config = yaml.safe_load(f)
-
-    trt.init_libnvinfer_plugins(TRT_LOGGER, '')
-    ctypes.cdll.LoadLibrary(config['TRT_build']['static_plugin_sofile'])
-
-    sdbase = SD_TRT(
-            pipe_dir=config['pipe_dir']['hf_dir'],
-            engine_dir=config['pipe_dir']['onnx_opt_dir'],
-            vae_dir="/work/CKPTS/madebyollin--sdxl-vae-fp16-fix",
-            engine_config=config['TRT_build']['input_shapes']['unet'],
-            enable_dynamic_shape=config['TRT_build']['enable_dynamic_shape'])"""
-    
     import config
+
+    tokenizer = AutoTokenizer.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", trust_remote_code=True)
+    vlm_config = AutoConfig.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", trust_remote_code=True)
+    vlm_config.quantization_config["use_exllama"] = False
+    vlmodel = AutoModelForCausalLM.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
+    torch_gc()
 
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
     ctypes.cdll.LoadLibrary(config.static_plugin_sofile)
@@ -191,7 +197,6 @@ if __name__ == '__main__':
         enable_dynamic_shape=True,
         lowvram=True,
     )
-    sdbase.activateEngines()
 
     uvicorn.run(app, host=args.host, port=args.port, workers=args.workers)
 

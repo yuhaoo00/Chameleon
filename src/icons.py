@@ -14,9 +14,9 @@ EXECUTE_WORKFLOW_ICON = "https://ailab-huawei-cdn.nolibox.com/upload/static/care
 DEFAULT_PLUGIN_ICON = "https://ailab-huawei-cdn.nolibox.com/upload/static/carefree-drawboard/icons/default-plugin.svg"
 DEFAULT_PLUGIN_GROUP_ICON = "https://ailab-huawei-cdn.nolibox.com/upload/static/carefree-drawboard/icons/default-plugin-group.svg"
 
-FUSING_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FFusing.svg"
-EDGEFUSING_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FEdgeFusing.svg"
-BODYFUSING_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FBodyFusing.svg"
+FUSION_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FFusing.svg"
+FUSION_PLUS_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FEdgeFusing.svg"
+FUSION_PPLUS_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FBodyFusing.svg"
 INPAINT_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2Finpaint.svg"
 CNINPAINT_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FCNinpaint.svg"
 EDGE_ICON = "https://image-1300968464.cos.ap-shanghai.myqcloud.com/chameleon%2Ficons%2FgetEdge.svg"

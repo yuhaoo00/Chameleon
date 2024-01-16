@@ -1,9 +1,9 @@
 import torch
 import numpy as np
-import math
 from PIL import Image
 from .pipelines import SDXL_T2I_Pipeline, SDXL_I2I_Pipeline, SDXL_Inpaint_Pipeline, SDXL_DemoFusion, SDXL_T2I_CN_Pipeline
-from .utils import torch_gc, url2img, str2img, img2str, crop_masked_area, recover_cropped_image, mask_to_box, get_angle, rotate_xy
+from .utils import url2img, str2img, img2str, crop_masked_area, recover_cropped_image, get_angle, ExpandMask, img2url
+
 
 main_dir = "/work/CKPTS/"
 
@@ -153,15 +153,15 @@ def sd_inpaint(base, data):
     mask = str2img(data.mask)[0].convert("L")
     
     if data.focus_mode:
-        img_c, mask_c, box = crop_masked_area(img, mask, data.w, data.h)
+        img_r, mask_r, box, _ = crop_masked_area(img, mask, data.w, data.h)
     else:
-        img_c, mask_c = img, mask
+        img_r, mask_r = img, mask
 
     images = pipe.infer(
                 prompt=data.text,
                 negative_prompt=data.negative_prompt,
-                image=img_c,
-                mask_image=mask_c,
+                image=img_r,
+                mask_image=mask_r,
                 height=data.h,
                 width=data.w,
                 strength=data.strength,
@@ -254,7 +254,7 @@ def sam_matting(data):
     from .extensions.MobileSAM import sam_model_registry, SamPredictor
     img = str2img(data.image)[0]
     mask = str2img(data.mask)[0].convert("L")
-    box = mask_to_box(mask)
+    box = np.array(mask.getbbox())
 
     mobile_sam = sam_model_registry["vit_t"](checkpoint=sam_paths["mobile_sam"]).cuda()
     mobile_sam.eval()
@@ -269,7 +269,7 @@ def sam_matting(data):
     return image_str
 
 
-def easy_fusing(data):
+def easy_fusion(data, return_mask=False):
     info0 = data.info0
     info1 = data.info1
 
@@ -283,34 +283,77 @@ def easy_fusing(data):
     theta0 = get_angle(info0['transform'][0], info0['transform'][2], info0['w'], info0['h'])
     theta1 = get_angle(info1['transform'][0], info1['transform'][2], info1['w'], info1['h'])
 
-    img0 = img0.resize(size=[int(info0['w']), int(info0['h'])]).rotate(np.degrees(theta0), expand=True)
-    img1 = img1.resize(size=[int(info1['w']), int(info1['h'])]).rotate(np.degrees(theta1), expand=True)
-    
-    max_width0 = math.sqrt(info0['w']**2+info0['h']**2)
-    max_width1 = math.sqrt(info1['w']**2+info1['h']**2)
-    max_width = int(max_width0+max_width1)
-    new = Image.new("RGBA", [max_width, max_width], color=(0,0,0,0))
+    img0 = img0.resize(size=[int(info0['w']), int(info0['h'])])
+    img1 = img1.resize(size=[int(info1['w']), int(info1['h'])])
 
-    offset_x0, offset_y0 = rotate_xy(-info0['w']//2,-info0['h']//2,0,0,theta0) 
-    offset_x1, offset_y1 = rotate_xy(-info1['w']//2,-info1['h']//2,0,0,theta1) 
+    diff_x = info0['x']-info1['x']
+    diff_y = info0['y']-info1['y']
+    m = max(max(max(info0['w'],info0['h']), abs(diff_x)), abs(diff_y))
 
-    xx = min(info1['x'], info0['x'])
-    yy = min(info1['y'], info0['y'])
-    info0['x'] -= xx
-    info1['x'] -= xx
-    info0['y'] -= yy
-    info1['y'] -= yy
-    offset_x0, offset_y0 = rotate_xy(-info0['w']//2,-info0['h']//2,0,0,theta0) 
-    offset_x1, offset_y1 = rotate_xy(-info1['w']//2,-info1['h']//2,0,0,theta1) 
-    offset_x0 = int(offset_x0+img0.size[0]/2)
-    offset_y0 = int(img0.size[1]/2-offset_y0)
-    offset_x1 = int(offset_x1+img1.size[0]/2)
-    offset_y1 = int(img1.size[1]/2-offset_y1)
+    new0 = Image.new("RGBA", [int(2*m+info1['w']), int(2*m+info1['h'])], color=(0,0,0,0))
+    new1 = new0.copy()
 
-    new.paste(img1, (info1['x']-offset_x1, info1['y']-offset_y1), mask=img1.getchannel("A"))
-    new.paste(img0, (info0['x']-offset_x0, info0['y']-offset_y0), mask=img0.getchannel("A"))
+    new0.paste(img0, (int(m+diff_x), int(m+diff_y)), mask=img0.getchannel("A"))
+    new1.paste(img1, (int(m), int(m)), mask=img1.getchannel("A"))
 
-    image_str = img2str(new)
+    new0 = new0.rotate(np.degrees(theta0), center=(int(m+diff_x), int(m+diff_y)))
+    new1 = new1.rotate(np.degrees(theta1), center=(int(m), int(m)))
+
+    new1.paste(new0, (0,0), mask=new0.getchannel("A"))
+    box = new1.getbbox()
+    new1 = new1.crop(box)
+
+    if return_mask:
+        mask = new0.crop(box).getchannel("A")
+        return new1, mask
+
+    image_str = img2str(new1)
     return image_str
+
+
+def style_fusion(base, tokenizer, vlmodel, data):
+    generator = get_generator(data.seed)
+    # Easy Fusion
+    img, mask = easy_fusion(data, True)
+    img_r, mask_r, box, img_c = crop_masked_area(img, mask, data.w, data.h)
+    mask_r = ExpandMask(mask_r, data.pad_strength, data.blur_strength)
+    img_r = img_r.convert("RGB")
+    img_c = img2url(img_c)
+
+    # Image Caption
+    base.unload()
+    vlmodel.to("cuda")
+
+    query = tokenizer.from_list_format([
+        {'image': img_c},
+        {'text': 'Descripe the image in English:'},
+    ])
+    prompt, _ = vlmodel.chat(tokenizer, query=query, history=None)
+    print(prompt)
+
+    vlmodel.to("cpu")
+    base.load()
+    base.activateEngines()
+    
+    # Repaint
+    pipe = SDXL_Inpaint_Pipeline(base)
+
+    images = pipe.infer(
+                prompt=prompt,
+                negative_prompt=data.negative_prompt,
+                image=img_r,
+                mask_image=mask_r,
+                height=data.h,
+                width=data.w,
+                strength=data.strength,
+                num_inference_steps=data.num_steps,
+                guidance_scale=data.guidance_scale, 
+                generator=generator,
+                num_images_per_prompt=data.num_samples)
+    
+    images = recover_cropped_image(images, img, box)
+
+    images_str = img2str(images)
+    return images_str
 
 

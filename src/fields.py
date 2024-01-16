@@ -452,6 +452,42 @@ cn_inpainting_fields = OrderedDict(
     ),
 )
 
+# Style Fusion
+sfusion_fields = OrderedDict(
+    w=w_field,
+    h=h_field,
+    text=inpainting_prompt,
+    negative_prompt=negative_prompt,
+    sampler=sampler,
+    num_steps=num_steps,
+    guidance_scale=guidance_scale,
+    strength=strength,
+    seed=seed,
+    num_samples=num_samples,
+    pad_strength=INumberField(
+        default=10,
+        min=0,
+        max=50,
+        step=1,
+        isInt=True,
+        label=I18N(
+            zh="Mask Padding Strength",
+            en="Mask Padding Strength",
+        ),
+    ),
+    blur_strength=INumberField(
+        default=5,
+        min=0,
+        max=20,
+        step=1,
+        isInt=True,
+        label=I18N(
+            zh="Mask Blurring Strength",
+            en="Mask Blurring Strength",
+        ),
+    )
+)
+
 # Smart Fusing
 box_padding = INumberField(
     default=0.1,
@@ -558,4 +594,5 @@ __all__ = [
     "smart_fusing_fields",
     "demofusion_fields",
     "matting_fields",
+    "sfusion_fields",
 ]

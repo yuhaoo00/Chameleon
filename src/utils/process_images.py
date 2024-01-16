@@ -1,9 +1,20 @@
 import io
 import base64
 import requests
+import datetime
 import numpy as np
-from PIL import Image
-from cftool.cv import ImageBox
+from PIL import Image, ImageFilter
+from typing import List, Tuple
+import torch
+
+def img2url(img):
+    current_time = datetime.datetime.now()
+    time_format = "%Y-%m-%d_%H-%M-%S"
+    formatted_time = current_time.strftime(time_format)
+    file_name = f".images/{formatted_time}.png"
+    img.save("./" + file_name)
+    return "http://localhost:8123/"+file_name
+
 
 def url2img(url):
     response = requests.get(url)
@@ -42,8 +53,8 @@ def str2img(strs):
 
     return imgs
 
-def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int, tw: int, th: int) -> ImageBox:
-    l, t, r, b = lt_rb.tuple
+def adjust_lt_rb(lt_rb: Tuple, w: int, h: int, paddingx: int, paddingy: int, tw: int, th: int) -> Tuple:
+    (l, t, r, b) = lt_rb
     l = max(0, l - paddingx)
     t = max(0, t - paddingy)
     r = min(w, r + paddingx)
@@ -76,31 +87,27 @@ def adjust_lt_rb(lt_rb: ImageBox, w: int, h: int, paddingx: int, paddingy: int, 
         else:
             t -= dh
             b += dh
-    return ImageBox(l, t, r, b)
+    return (l, t, r, b)
 
-def crop_masked_area(image, mask, tw, th, padding_scale=0.1):
+def crop_masked_area(image, mask, tw, th, padding_repaint=0.1, padding_caption=0.25):
     """
     image: PIL.Image "RGB", uint8
     mask: PIL.Image "L", uint8
     """
     w, h = mask.size
-    lt_rb = ImageBox.from_mask(np.array(mask), 0)
-    lt_rb = adjust_lt_rb(lt_rb, w, h, int(padding_scale*w), int(padding_scale*h), tw, th)
+    ltrb_repaint = adjust_lt_rb(mask.getbbox(), w, h, int(padding_repaint*w), int(padding_repaint*h), tw, th)
+    ltrb_caption = adjust_lt_rb(mask.getbbox(), w, h, int(padding_caption*w), int(padding_caption*h), tw, th)
 
-    
-    cropped_mask = mask.crop(lt_rb.tuple).resize((tw,th))
-    if isinstance(image, list): 
-        cropped_image = []
-        for img in image:
-            cropped_image.append(img.crop(lt_rb.tuple).resize((tw,th)))
-    else:
-        cropped_image = image.crop(lt_rb.tuple).resize((tw,th))
-    return cropped_image, cropped_mask, lt_rb
+    cropped_mask = mask.crop(ltrb_repaint).resize((tw,th))
+    cropped_image_repaint = image.crop(ltrb_repaint).resize((tw,th))
+    cropped_image_caption = image.crop(ltrb_caption).resize((tw,th))
+
+    return cropped_image_repaint, cropped_mask, ltrb_repaint, cropped_image_caption
 
 
 def recover_cropped_image(gen_images, orig_image, lt_rb):
     new = []
-    l, t, r, b = lt_rb.tuple
+    (l, t, r, b) = lt_rb
     bw, bh = r-l, b-t
     for img in gen_images:
         img = img.resize((bw, bh))
@@ -114,11 +121,6 @@ def get_angle(a,c,w,h):
     if np.sin(theta)*c <= 0:
         theta = -theta
     return theta
-
-def rotate_xy(x,y,xo,yo,theta):
-    x_ = (x-xo)*np.cos(theta) - (y-yo)*np.sin(theta) + xo
-    y_ = (x-xo)*np.sin(theta) + (y+yo)*np.cos(theta) + yo
-    return x_, y_
 
 def img_transform(img, data):
     if img.mode == "RGBA":
@@ -137,27 +139,15 @@ def png_to_mask(mask):
     mask = Image.fromarray(mask)
     return mask
 
-def mask_to_box(mask):
-    mask = np.array(mask)
+def ExpandMask(mask, pad_strength=1, blur_strength=2):
+    mask = np.array(mask)/255.
     h, w = mask.shape
-    mask_x = np.sum(mask, axis=0)
-    mask_y = np.sum(mask, axis=1)
-    x0, x1 = 0, w-1
-    y0, y1 = 0, h-1
-    while x0 < w:
-        if mask_x[x0] != 0:
-            break
-        x0 += 1
-    while x1 > -1:
-        if mask_x[x1] == 0:
-            break
-        x1 -= 1
-    while y0 < h:
-        if mask_y[y0] != 0:
-            break
-        y0 += 1
-    while y1 > -1:
-        if mask_y[y1] == 0:
-            break
-        y1 -= 1
-    return np.array([x0, y0, x1, y1])
+    kernel_size = 3+2*pad_strength
+    mask = torch.from_numpy(mask).to("cuda").float().unsqueeze(0).unsqueeze(0)
+    kernel = torch.ones((1,1,kernel_size,kernel_size), device="cuda")
+    x = torch.nn.functional.conv2d(mask, kernel, padding=kernel_size//2)
+    res = x>0
+    res = res.cpu().numpy().reshape(h, w)
+    res = Image.fromarray(res).convert("L")
+    res = res.filter(ImageFilter.GaussianBlur(radius=blur_strength))
+    return res
