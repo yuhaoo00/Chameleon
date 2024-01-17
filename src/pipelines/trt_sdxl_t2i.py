@@ -1,8 +1,8 @@
+from .trt_sdxl_base import SD_TRT
 import torch
-from typing import Optional, List, Union, Tuple, Any, Dict
+from typing import Optional, List, Union, Tuple
 from diffusers.utils.torch_utils import randn_tensor
 
-from .trt_sdxl_base import SD_TRT
 
 class SDXL_T2I_Pipeline:
     def __init__(self, base: SD_TRT):

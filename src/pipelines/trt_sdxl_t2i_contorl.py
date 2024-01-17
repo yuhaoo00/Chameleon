@@ -1,14 +1,14 @@
 
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from .trt_sdxl_base import SD_TRT
+from .engine import EngineWrapper
+import PIL.Image
+import torch
 import numpy as np
 from cuda import cudart
 from time import time
-import PIL.Image
-import torch
+from typing import List, Optional, Tuple, Union
 from diffusers.image_processor import PipelineImageInput, VaeImageProcessor
 from diffusers.utils.torch_utils import randn_tensor
-from .trt_sdxl_base import SD_TRT
-from .engine import EngineWrapper
 
 class SDXL_T2I_CN_Pipeline:
     def __init__(

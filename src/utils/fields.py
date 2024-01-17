@@ -1,5 +1,4 @@
 from cfdraw import *
-from pathlib import Path
 from collections import OrderedDict
 
 

@@ -1,8 +1,4 @@
-import ctypes
-import argparse
-import yaml
 import os
-import shutil
 import numpy as np
 import tensorrt as trt
 import torch

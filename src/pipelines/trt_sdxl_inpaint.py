@@ -1,10 +1,10 @@
+from .trt_sdxl_base import SD_TRT
 import torch
-from typing import Optional, List, Union, Tuple, Any, Dict
+from typing import Optional, List, Union, Tuple
 from diffusers.utils.torch_utils import randn_tensor
 from diffusers.image_processor import PipelineImageInput
 from diffusers.image_processor import VaeImageProcessor
 
-from .trt_sdxl_base import SD_TRT
 
 def retrieve_latents(encoder_output, generator):
     if hasattr(encoder_output, "latent_dist"):

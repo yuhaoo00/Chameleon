@@ -1,20 +1,20 @@
-import time, datetime
-import yaml
-import torch
+import config
+from src.pipelines import SD_TRT
+from src.pipelines.engine import TRT_LOGGER
+from src.utils_trt import export_onnx, optimize_onnx, export_engine
+from src.generate import *
+from src.utils import *
+
 import os
+import time, datetime
 import uvicorn
 import ctypes
 import argparse
 import tensorrt as trt
 from fastapi import FastAPI
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
-from src.pipelines import SD_TRT
-from src.pipelines.engine import TRT_LOGGER
-from src.generate import *
-from src.utils import *
 
 app = FastAPI()
-
 
 @app.post("/t2i")
 async def t2i(request: Inputdata) -> Outputdata:
@@ -180,16 +180,36 @@ if __name__ == '__main__':
     parser.add_argument('--workers', type=int, default=1)
     args = parser.parse_args()
 
-    import config
+    # build SD trt_engines
+    trt.init_libnvinfer_plugins(TRT_LOGGER, '')
+    ctypes.cdll.LoadLibrary(config.static_plugin_sofile)
+    if not os.path.exists(config.save_dir):
+        export_onnx(
+            config.pipe_dir, 
+            config.save_dir, 
+            config.lora_dir, 
+            config.control_dir, 
+            config.opset, 
+            torch.float16 if config.fp16 else torch.float32,
+        )
+        optimize_onnx(
+            config.save_dir,
+        )
+        export_engine(
+            config.save_dir,
+            config.save_dir,
+            config.fp16,
+            config.dynamic_input_shapes,
+        )
 
+    # load VLM pipeline
     tokenizer = AutoTokenizer.from_pretrained(config.vlm_dir, trust_remote_code=True)
     vlm_config = AutoConfig.from_pretrained(config.vlm_dir, trust_remote_code=True)
     vlm_config.quantization_config["use_exllama"] = False
     vlmodel = AutoModelForCausalLM.from_pretrained(config.vlm_dir, config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
     torch_gc()
 
-    trt.init_libnvinfer_plugins(TRT_LOGGER, '')
-    ctypes.cdll.LoadLibrary(config.static_plugin_sofile)
+    # load SD trt_pipeline
     sdbase = SD_TRT(
         pipe_dir=config.pipe_dir,
         engine_dir=config.save_dir,
@@ -199,7 +219,5 @@ if __name__ == '__main__':
         use_cuda_graph=config.use_cuda_graph,
         lowvram=config.lowvram,
     )
-
     uvicorn.run(app, host=args.host, port=args.port, workers=args.workers)
-
     sdbase.teardown()

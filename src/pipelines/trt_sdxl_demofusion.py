@@ -1,4 +1,6 @@
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from .trt_sdxl_base import SD_TRT
+from .engine import EngineWrapper
+
 import matplotlib.pyplot as plt
 import torch
 import torch.nn.functional as F
@@ -6,8 +8,7 @@ import random
 import torchvision
 from PIL import Image
 from tqdm.auto import tqdm
-from .trt_sdxl_base import SD_TRT
-from .engine import EngineWrapper
+from typing import List, Optional, Tuple, Union
 
 from diffusers.utils.torch_utils import randn_tensor
 

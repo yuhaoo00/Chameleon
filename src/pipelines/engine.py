@@ -16,20 +16,15 @@
 # limitations under the License.
 #
 
-from collections import OrderedDict
-import numpy as np
+import torch
 import onnx
 import onnx_graphsurgeon as gs
-import os
-from PIL import Image
+import tensorrt as trt
+import numpy as np
+from cuda import cudart
 from polygraphy.backend.common import bytes_from_path
 from polygraphy.backend.trt import engine_from_bytes
-import random
-import tensorrt as trt
-import torch
-import requests
-from io import BytesIO
-from cuda import cudart
+from collections import OrderedDict
 
 TRT_LOGGER = trt.Logger(trt.Logger.ERROR)
 

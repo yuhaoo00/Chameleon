@@ -1,13 +1,9 @@
-import sys
-sys.path.append("/mnt/Data/CodeML/SD/Chameleon")
+from src.utils import *
+import src.utils.icons as paths
 import requests
-import numpy as np
 from PIL import Image
 from typing import List
 from cfdraw import *
-from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData
-from src.fields import *
-import src.icons as paths
 # plugins
 
 class Upscale(IFieldsPlugin):
