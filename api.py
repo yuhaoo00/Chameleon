@@ -158,13 +158,14 @@ async def fusion(request: Inputdata_fusing) -> Outputdata:
 async def fusion_plus(request: Inputdata_fusing_plus) -> Outputdata:
     time1 = time.time()
 
-    imgs_str = style_fusion(sdbase, tokenizer, vlmodel, request)
+    imgs_str, caption = style_fusion(sdbase, tokenizer, vlmodel, request)
     
     time2 = time.time()
     answer = Outputdata(
         imgs=imgs_str,
         time=round(time2-time1,8)
     )
+    print(f"#Style Fusion (caption: \"{caption}\")")
 
     log = f"#Style Fusion " + "[" + datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "]"
     print(log)
@@ -181,10 +182,10 @@ if __name__ == '__main__':
 
     import config
 
-    tokenizer = AutoTokenizer.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", trust_remote_code=True)
-    vlm_config = AutoConfig.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(config.vlm_dir, trust_remote_code=True)
+    vlm_config = AutoConfig.from_pretrained(config.vlm_dir, trust_remote_code=True)
     vlm_config.quantization_config["use_exllama"] = False
-    vlmodel = AutoModelForCausalLM.from_pretrained("/work/CKPTS/Qwen-VL-Chat-Int4", config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
+    vlmodel = AutoModelForCausalLM.from_pretrained(config.vlm_dir, config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
     torch_gc()
 
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
@@ -195,7 +196,8 @@ if __name__ == '__main__':
         vae_dir=config.vae_dir,
         engine_config=config.dynamic_input_shapes,
         enable_dynamic_shape=True,
-        lowvram=True,
+        use_cuda_graph=config.use_cuda_graph,
+        lowvram=config.lowvram,
     )
 
     uvicorn.run(app, host=args.host, port=args.port, workers=args.workers)

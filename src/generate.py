@@ -312,10 +312,10 @@ def easy_fusion(data, return_mask=False):
 
 
 def style_fusion(base, tokenizer, vlmodel, data):
-    generator = get_generator(data.seed)
+    generator = get_generator(-1)
     # Easy Fusion
     img, mask = easy_fusion(data, True)
-    img_r, mask_r, box, img_c = crop_masked_area(img, mask, data.w, data.h)
+    img_r, mask_r, box, img_c = crop_masked_area(img, mask, 1024, 1024)
     mask_r = ExpandMask(mask_r, data.pad_strength, data.blur_strength)
     img_r = img_r.convert("RGB")
     img_c = img2url(img_c)
@@ -325,11 +325,10 @@ def style_fusion(base, tokenizer, vlmodel, data):
     vlmodel.to("cuda")
 
     query = tokenizer.from_list_format([
-        {'image': img_c},
-        {'text': 'Descripe the image in English:'},
+        {"image": img_c},
+        {"text": "Descripe the image in English:"},
     ])
     prompt, _ = vlmodel.chat(tokenizer, query=query, history=None)
-    print(prompt)
 
     vlmodel.to("cpu")
     base.load()
@@ -340,20 +339,20 @@ def style_fusion(base, tokenizer, vlmodel, data):
 
     images = pipe.infer(
                 prompt=prompt,
-                negative_prompt=data.negative_prompt,
+                negative_prompt="bad composition",
                 image=img_r,
                 mask_image=mask_r,
-                height=data.h,
-                width=data.w,
+                height=1024,
+                width=1024,
                 strength=data.strength,
-                num_inference_steps=data.num_steps,
-                guidance_scale=data.guidance_scale, 
+                num_inference_steps=30,
+                guidance_scale=7.5, 
                 generator=generator,
-                num_images_per_prompt=data.num_samples)
+                num_images_per_prompt=1)
     
     images = recover_cropped_image(images, img, box)
 
     images_str = img2str(images)
-    return images_str
+    return images_str, prompt
 
 

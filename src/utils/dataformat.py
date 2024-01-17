@@ -85,14 +85,7 @@ class Inputdata_fusing(BaseModel):
 class Inputdata_fusing_plus(BaseModel):
     info0: Dict
     info1: Dict
-    text: str
-    num_steps: int = 40
-    guidance_scale: float = 7.5
-    seed: Optional[int] = -1
     negative_prompt: Optional[str] = None
     strength: Optional[float] = 0.3
-    h: Optional[int] = 1024
-    w: Optional[int] = 1024
-    num_samples: Optional[int] = 1
     pad_strength: int = 3
     blur_strength: int = 5

@@ -3,13 +3,11 @@ import pathlib
 import inspect
 import torch
 from cuda import cudart
-from time import time
 from typing import Optional, List, Union, Tuple, Any, Dict
 
 from transformers import CLIPTokenizer, CLIPTextModel, CLIPTextModelWithProjection
 from diffusers import AutoencoderKL
 from diffusers.image_processor import VaeImageProcessor
-from diffusers.utils.torch_utils import randn_tensor
 from diffusers.models.attention_processor import (
     AttnProcessor2_0,
     LoRAAttnProcessor2_0,
@@ -27,6 +25,7 @@ class SD_TRT:
         vae_dir=None,
         engine_config={},
         enable_dynamic_shape=True,
+        use_cuda_graph=True,
         device='cuda',
         scheduler_class="EulerDiscreteScheduler",
         lowvram=False,
@@ -47,7 +46,7 @@ class SD_TRT:
         self.shared_device_memory = None
         self.engine_config = engine_config
         self.enable_dynamic_shape = enable_dynamic_shape
-        self.use_cuda_graph = not enable_dynamic_shape
+        self.use_cuda_graph = use_cuda_graph
 
         # create Evens and Streams
         _, self.stream = cudart.cudaStreamCreate()

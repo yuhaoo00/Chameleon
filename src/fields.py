@@ -325,6 +325,8 @@ controlnet_scale = INumberField(
         en="Conditioning Scale",
     ),
 )
+
+# demofusion
 demofusion_prompt = text.copy()
 demofusion_prompt.numRows = 3
 demofusion_fields = OrderedDict(
@@ -335,7 +337,7 @@ demofusion_fields = OrderedDict(
             step=256,
             isInt=True,
             label=I18N(
-                zh="Width",
+                zh="宽",
                 en="Width",
             ),
         ),
@@ -346,7 +348,7 @@ demofusion_fields = OrderedDict(
             step=256,
             isInt=True,
             label=I18N(
-                zh="Height",
+                zh="高",
                 en="Height",
             ),
         ),
@@ -434,116 +436,41 @@ demofusion_fields = OrderedDict(
         ),
 )
 
-cn_inpainting_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    text=inpainting_prompt,
-    negative_prompt=negative_prompt,
-    strength=strength,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    controlnet_conditioning_scale=controlnet_scale,
-    seed=seed,
-    num_samples=num_samples,
-    focus_mode=IBooleanField(
-        default=False,
-        label=I18N(zh="聚焦模式", en="Focus Mode"),
-    ),
-)
 
 # Style Fusion
 sfusion_fields = OrderedDict(
-    w=w_field,
-    h=h_field,
-    text=inpainting_prompt,
-    negative_prompt=negative_prompt,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    strength=strength,
-    seed=seed,
-    num_samples=num_samples,
+    strength=INumberField(
+        default=0.5,
+        min=0.0,
+        max=1.0,
+        step=0.02,
+        label=I18N(
+            zh="Creativity",
+            en="Creativity",
+        ),
+    ),
     pad_strength=INumberField(
-        default=10,
+        default=20,
         min=0,
-        max=50,
+        max=40,
         step=1,
         isInt=True,
         label=I18N(
-            zh="Mask Padding Strength",
-            en="Mask Padding Strength",
+            zh="Semanticity",
+            en="Semanticity",
         ),
     ),
     blur_strength=INumberField(
         default=5,
         min=0,
-        max=20,
+        max=10,
         step=1,
         isInt=True,
         label=I18N(
-            zh="Mask Blurring Strength",
-            en="Mask Blurring Strength",
+            zh="Soft Edge",
+            en="Soft Edge",
         ),
     )
-)
-
-# Smart Fusing
-box_padding = INumberField(
-    default=0.1,
-    min=0.0,
-    max=0.5,
-    step=0.02,
-    label=I18N(
-        zh="聚焦范围",
-        en="Box Padding Scale",
-    ),
-)
-mask_expand = INumberField(
-    default=10,
-    min=0,
-    max=50,
-    step=1,
-    isInt=True,
-    label=I18N(
-        zh="遮罩外扩",
-        en="Mask Expanding Scale",
-    ),
-)
-smart_fusing_fields = OrderedDict(
-    version=ISelectField(
-        default="SDXL",
-        options=["SDXL", "SDXL (ft)", "SDv1", "SDv1 (ft)"],
-        label=I18N(
-            zh="Inpaint模型", 
-            en="Inpaint Model"
-        ),
-    ),
-    cn_type=ISelectField(
-        default="canny",
-        options=["canny", "soft edge", "depth"],
-        label=I18N(
-            zh="ControlNet模型", 
-            en="ControlNet Model"
-        ),
-    ),
-    w=w_field,
-    h=h_field,
-    text=inpainting_prompt,
-    negative_prompt=negative_prompt,
-    sampler=sampler,
-    num_steps=num_steps,
-    guidance_scale=guidance_scale,
-    strength=strength,
-    controlnet_conditioning_scale=controlnet_scale,
-    seed=seed,
-    num_samples=num_samples,
-    guess_mode=IBooleanField(
-        default=False,
-        label=I18N(zh="推测模式", en="Guess Mode"),
-    ),
-    box_padding=box_padding,
-    mask_expand=mask_expand,
 )
 
 # matting
@@ -559,7 +486,7 @@ matting_fields = OrderedDict(
 )
 
 
-# super resolution fields
+# super resolution
 sr_fields = OrderedDict(
     version=ISelectField(
         default="ESRGAN-general",
@@ -590,8 +517,6 @@ __all__ = [
     "st_fields",
     "sr_fields",
     "inpainting_fields",
-    "cn_inpainting_fields",
-    "smart_fusing_fields",
     "demofusion_fields",
     "matting_fields",
     "sfusion_fields",

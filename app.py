@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 from typing import List
 from cfdraw import *
-from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData, get_angle, url2img
+from src.utils import img_transform, str2img, img2str, png_to_mask, parser_controlnet, parser_INodeData
 from src.fields import *
 import src.icons as paths
 # plugins
@@ -18,12 +18,12 @@ class Upscale(IFieldsPlugin):
             h=250,
             src=paths.SR_ICON,
             tooltip=I18N(
-                zh="超分辨率",
+                zh="Super Resolution",
                 en="Super Resolution",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="超分辨率",
+                    zh="Super Resolution",
                     en="Super Resolution",
                 ),
                 definitions=sr_fields,
@@ -56,12 +56,12 @@ class Txt2Img(IFieldsPlugin):
             useModal=True,
             src=paths.TEXT_TO_IMAGE_ICON,
             tooltip=I18N(
-                zh="文生图",
+                zh="Text to Image",
                 en="Text to Image",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="文生图",
+                    zh="Text to Image",
                     en="Text to Image",
                 ),
                 numColumns=2,
@@ -107,12 +107,12 @@ class Img2Img(IFieldsPlugin):
             useModal=True,
             src=paths.IMAGE_TO_IMAGE_ICON,
             tooltip=I18N(
-                zh="图生图",
+                zh="Image to Image",
                 en="Image to Image",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="图生图",
+                    zh="Image to Image",
                     en="Image to Image",
                 ),
                 numColumns=2,
@@ -155,12 +155,12 @@ class DemoFusion(IFieldsPlugin):
             **common_styles,
             src=paths.DETAIL_ICON,
             tooltip=I18N(
-                zh="重绘细节",
+                zh="DemoFusion",
                 en="DemoFusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="重绘细节",
+                    zh="DemoFusion",
                     en="DemoFusion",
                 ),
                 definitions=demofusion_fields,
@@ -201,12 +201,12 @@ class Inpainting(IFieldsPlugin):
             **common_styles,
             src=paths.INPAINT_ICON,
             tooltip=I18N(
-                zh="局部重绘",
+                zh="Inpainting",
                 en="Inpainting",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="局部重绘",
+                    zh="Inpainting",
                     en="Inpainting",
                 ),
                 definitions=inpainting_fields,
@@ -247,12 +247,12 @@ class StyleTransfer(IFieldsPlugin):
             **common_styles,
             src=paths.STYLE_ICON,
             tooltip=I18N(
-                zh="风格迁移",
+                zh="Style Transfer",
                 en="Style Transfer"
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="风格迁移",
+                    zh="Style Transfer",
                     en="Style Transfer",
                 ),
                 definitions=st_fields,
@@ -260,15 +260,7 @@ class StyleTransfer(IFieldsPlugin):
         )
 
     async def process(self, data: ISocketRequest) -> List[Image.Image]:
-        def callback(step: int, *args) -> bool:
-            return self.send_progress((step+1) / data.extraData["num_steps"])
-        return 
-        
-        img = await self.load_image(data.nodeData.src)
-        img = img_transform(img, data.nodeData)
-
-        pipe = get_ipadapter(data.extraData["version"])
-        return style_transfer(pipe, img, data, callback)
+        return
 
 
 class Matting(IFieldsPlugin):
@@ -276,15 +268,15 @@ class Matting(IFieldsPlugin):
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
             w=240,
-            h=180,
+            h=110,
             src=paths.SOD_ICON,
             tooltip=I18N(
-                zh="抠图",
+                zh="Image Matting",
                 en="Image Matting",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="抠图",
+                    zh="Image Matting",
                     en="Image Matting",
                 ),
                 definitions={},
@@ -317,12 +309,12 @@ class EasyFusion(IFieldsPlugin):
             h=110,
             src=paths.FUSION_ICON,
             tooltip=I18N(
-                zh="直接融合",
+                zh="Easy Fusion",
                 en="Easy Fusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="直接融合",
+                    zh="Easy Fusion",
                     en="Easy Fusion",
                 ),
                 definitions={},
@@ -348,15 +340,16 @@ class StyleFusion(IFieldsPlugin):
     @property
     def settings(self) -> IPluginSettings:
         return IPluginSettings(
-            **common_styles,
+            w=0.15,
+            h=0.22,
             src=paths.FUSION_PLUS_ICON,
             tooltip=I18N(
-                zh="风格融合",
+                zh="Style Fusion",
                 en="Style Fusion",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="风格融合",
+                    zh="Style Fusion",
                     en="Style Fusion",
                 ),
                 definitions=sfusion_fields,
@@ -372,15 +365,7 @@ class StyleFusion(IFieldsPlugin):
         data_to_send = {
             "info0": info0,
             "info1": info1,
-            "text": data.extraData["text"],
             "strength": data.extraData["strength"],
-            "num_steps": data.extraData["num_steps"],
-            "guidance_scale": data.extraData["guidance_scale"],
-            "seed": data.extraData["seed"],
-            "negative_prompt": data.extraData["negative_prompt"],
-            "num_samples": data.extraData["num_samples"],
-            "h": data.extraData["h"],
-            "w": data.extraData["w"],
             "pad_strength": data.extraData["pad_strength"],
             "blur_strength": data.extraData["blur_strength"],
         }
@@ -398,12 +383,12 @@ class Canny(IFieldsPlugin):
             h=250,
             src=paths.EDGE_ICON,
             tooltip=I18N(
-                zh="获取Canny图",
+                zh="Get Canny",
                 en="Get Canny",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="获取Canny图",
+                    zh="Get Canny",
                     en="Get Canny",
                 ),
                 definitions=canny_fields,
@@ -434,12 +419,12 @@ class Depth(IFieldsPlugin):
             h=110,
             src=paths.DEPTH_ICON,
             tooltip=I18N(
-                zh="获取深度图",
+                zh="Get Depth",
                 en="Get Depth",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="获取深度图",
+                    zh="Get Depth",
                     en="Get Depth",
                 ),
                 definitions={},
@@ -468,12 +453,12 @@ class Hed(IFieldsPlugin):
             h=110,
             src=paths.SOFTEDGE_ICON,
             tooltip=I18N(
-                zh="获取HED图",
+                zh="Get HED",
                 en="Get HED",
             ),
             pluginInfo=IFieldsPluginInfo(
                 header=I18N(
-                    zh="获取HED图",
+                    zh="Get HED",
                     en="Get HED",
                 ),
                 definitions={},
@@ -500,18 +485,18 @@ class StaticPlugins(IPluginGroup):
         return IPluginSettings(
             **common_group_styles,
             tooltip=I18N(
-                zh="一组用于生成图片的插件",
+                zh="A set of plugins for generating images",
                 en="A set of plugins for generating images",
             ),
             pivot=PivotType.RIGHT,
             follow=False,
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
-                    zh="创意工具箱",
+                    zh="Creator Toolbox",
                     en="Creator Toolbox",
                 ),
                 header=I18N(
-                    zh="创意工具箱",
+                    zh="Creator Toolbox",
                     en="Creator Toolbox",
                 ),
                 plugins={
@@ -528,7 +513,7 @@ class ImageFollowers(IPluginGroup):
             w=common_group_styles["w"],
             h=220,
             tooltip=I18N(
-                zh="AIGC工具箱",
+                zh="AIGC Toolbox",
                 en="AIGC Toolbox",
             ),
             nodeConstraint=NodeConstraints.IMAGE,
@@ -536,11 +521,11 @@ class ImageFollowers(IPluginGroup):
             follow=True,
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
-                    zh="AIGC工具箱",
+                    zh="AIGC Toolbox",
                     en="AIGC Toolbox",
                 ),
                 header=I18N(
-                    zh="AIGC工具箱",
+                    zh="AIGC Toolbox",
                     en="AIGC Toolbox",
                 ),
                 plugins={
@@ -563,7 +548,7 @@ class ImageAndMaskFollowers(IPluginGroup):
             offsetX=-48,
             expandOffsetX=64,
             tooltip=I18N(
-                zh="一组利用当前图片+蒙版来进行生成的插件",
+                zh="A set of plugins which uses an image and a mask to generate images",
                 en="A set of plugins which uses an image and a mask to generate images",
             ),
             nodeConstraintRules=NodeConstraintRules(
@@ -573,11 +558,11 @@ class ImageAndMaskFollowers(IPluginGroup):
             follow=True,
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
-                    zh="蒙版工具箱",
+                    zh="Mask Toolbox",
                     en="Mask Toolbox",
                 ),
                 header=I18N(
-                    zh="蒙版工具箱",
+                    zh="Mask Toolbox",
                     en="Mask Toolbox",
                 ),
                 plugins={
@@ -595,7 +580,7 @@ class ImagesFollowers(IPluginGroup):
             offsetX=-48,
             expandOffsetX=64,
             tooltip=I18N(
-                zh="一组利用两张图片来进行融合的插件",
+                zh="A set of plugins that fuse two images",
                 en="A set of plugins that fuse two images",
             ),
             nodeConstraintRules=NodeConstraintRules(
@@ -605,11 +590,11 @@ class ImagesFollowers(IPluginGroup):
             follow=True,
             pluginInfo=IPluginGroupInfo(
                 name=I18N(
-                    zh="融合工具箱",
+                    zh="Fusion Toolbox",
                     en="Fusion Toolbox",
                 ),
                 header=I18N(
-                    zh="融合工具箱",
+                    zh="Fusion Toolbox",
                     en="Fusion Toolbox",
                 ),
                 plugins={

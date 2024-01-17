@@ -6,7 +6,9 @@ control_dir = {
   "control_canny": "/work/CKPTS/diffusers--controlnet-canny-sdxl-1.0",
   "control_depth": "/work/CKPTS/diffusers--controlnet-depth-sdxl-1.0"
 }
+vlm_dir = "/work/CKPTS/Qwen-VL-Chat-Int4"
 
+lowvram = True
 opset = 17
 fp16 = True
 static_plugin_sofile = "/work/Stable_Diffusion_GPU_Deploy/plugins/build/libplugin.so"
@@ -14,6 +16,7 @@ static_plugin_sofile = "/work/Stable_Diffusion_GPU_Deploy/plugins/build/libplugi
 batch_size = [2, 2, 8]
 height = [512, 1024, 1024]
 width = [512, 1024, 1024]
+use_cuda_graph = False
 
 dynamic_input_shapes = {
   "control_canny": {

@@ -84,7 +84,6 @@ class EngineWrapper():
 
     def refit(self, onnx_path, onnx_refit_path):
         def convert_int64(arr):
-            # TODO: smarter conversion
             if len(arr.shape) == 0:
                 return np.int32(arr)
             return arr
@@ -219,7 +218,6 @@ class EngineWrapper():
         if use_cuda_graph:
             if self.cuda_graph_instance is not None:
                 CUASSERT(cudart.cudaGraphLaunch(self.cuda_graph_instance, stream))
-                CUASSERT(cudart.cudaStreamSynchronize(stream))
             else:
                 # do inference before CUDA graph capture
                 self.context.execute_async_v3(stream)
@@ -227,7 +225,7 @@ class EngineWrapper():
                 CUASSERT(cudart.cudaStreamBeginCapture(stream, cudart.cudaStreamCaptureMode.cudaStreamCaptureModeGlobal))
                 self.context.execute_async_v3(stream)
                 self.graph = CUASSERT(cudart.cudaStreamEndCapture(stream))
-                self.cuda_graph_instance = CUASSERT(cudart.cudaGraphInstantiate(self.graph, b"", 0))
+                self.cuda_graph_instance = CUASSERT(cudart.cudaGraphInstantiate(self.graph,0))
         else:
             self.context.execute_async_v3(stream)
 
