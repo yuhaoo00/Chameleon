@@ -1,7 +1,7 @@
 # Chameleon - AI Drawing Tool
 Welcome to Chameleon, an AI drawing tool based on [TensorRT](https://github.com/NVIDIA/TensorRT) and [SDXL](https://github.com/Stability-AI/generative-models), featuring style fusion and fast inference. The UI component of this project is built on the [Carefree-drawboard](https://github.com/carefree0910/carefree-drawboard) framework, and we would like to express our gratitude for providing a simple and intuitive interaction experience.
 
-![Illustration of Style Fusion](https://image-1300968464.cos.ap-shanghai.myqcloud.com/Obsidian/StyleFusion.png)
+![Illustration of Style Fusion](https://image-1300968464.cos.ap-shanghai.myqcloud.com/Obsidian/StyleFusion.jpg)
 
 ## Features
 
