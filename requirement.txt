@@ -1,0 +1,34 @@
+accelerate==0.24.0
+auto-gptq==0.6.0
+basicsr==1.4.2
+carefree-drawboard==0.0.3a0
+colored
+coloredlogs
+compel==2.0.2
+cuda-python==11.8.0
+diffusers==0.24.0
+invisible_watermark
+numpy==1.24.0
+onnx==1.14.0
+optimum==1.16.1
+packaging
+protobuf==4.24.4
+psutil
+pillow==10.1.0
+py3nvml
+safetensors
+scikit-image==0.22.0
+sympy
+timm==0.9.12
+transformers==4.35.2
+
+pywin32; platform_system == "Windows"
+nvtx; platform_system != "Windows"
+
+--index-url https://download.pytorch.org/whl/cu121
+torch==2.1.2
+torchvision==0.16.2
+
+--extra-index-url https://pypi.ngc.nvidia.com
+polygraphy
+onnx-graphsurgeon

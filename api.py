@@ -1,4 +1,4 @@
-import config
+import apiconfig_local
 from src.pipelines import SD_TRT
 from src.pipelines.engine import TRT_LOGGER
 from src.utils_trt import export_onnx, optimize_onnx, export_engine
@@ -182,42 +182,42 @@ if __name__ == '__main__':
 
     # build SD trt_engines
     trt.init_libnvinfer_plugins(TRT_LOGGER, '')
-    ctypes.cdll.LoadLibrary(config.static_plugin_sofile)
-    if not os.path.exists(config.save_dir):
+    ctypes.cdll.LoadLibrary(apiconfig_local.static_plugin_sofile)
+    if not os.path.exists(apiconfig_local.save_dir):
         export_onnx(
-            config.pipe_dir, 
-            config.save_dir, 
-            config.lora_dir, 
-            config.control_dir, 
-            config.opset, 
-            torch.float16 if config.fp16 else torch.float32,
+            apiconfig_local.pipe_dir, 
+            apiconfig_local.save_dir, 
+            apiconfig_local.lora_dir, 
+            apiconfig_local.control_dir, 
+            apiconfig_local.opset, 
+            torch.float16 if apiconfig_local.fp16 else torch.float32,
         )
         optimize_onnx(
-            config.save_dir,
+            apiconfig_local.save_dir,
         )
         export_engine(
-            config.save_dir,
-            config.save_dir,
-            config.fp16,
-            config.dynamic_input_shapes,
+            apiconfig_local.save_dir,
+            apiconfig_local.save_dir,
+            apiconfig_local.fp16,
+            apiconfig_local.dynamic_input_shapes,
         )
 
     # load VLM pipeline
-    tokenizer = AutoTokenizer.from_pretrained(config.vlm_dir, trust_remote_code=True)
-    vlm_config = AutoConfig.from_pretrained(config.vlm_dir, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(apiconfig_local.vlm_dir, trust_remote_code=True)
+    vlm_config = AutoConfig.from_pretrained(apiconfig_local.vlm_dir, trust_remote_code=True)
     vlm_config.quantization_config["use_exllama"] = False
-    vlmodel = AutoModelForCausalLM.from_pretrained(config.vlm_dir, config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
+    vlmodel = AutoModelForCausalLM.from_pretrained(apiconfig_local.vlm_dir, config=vlm_config, device_map="cpu", trust_remote_code=True).eval()
     torch_gc()
 
     # load SD trt_pipeline
     sdbase = SD_TRT(
-        pipe_dir=config.pipe_dir,
-        engine_dir=config.save_dir,
-        vae_dir=config.vae_dir,
-        engine_config=config.dynamic_input_shapes,
+        pipe_dir=apiconfig_local.pipe_dir,
+        engine_dir=apiconfig_local.save_dir,
+        vae_dir=apiconfig_local.vae_dir,
+        engine_config=apiconfig_local.dynamic_input_shapes,
         enable_dynamic_shape=True,
-        use_cuda_graph=config.use_cuda_graph,
-        lowvram=config.lowvram,
+        use_cuda_graph=apiconfig_local.use_cuda_graph,
+        lowvram=apiconfig_local.lowvram,
     )
     uvicorn.run(app, host=args.host, port=args.port, workers=args.workers)
     sdbase.teardown()

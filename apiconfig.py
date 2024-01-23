@@ -1,17 +1,17 @@
-pipe_dir = "/work/CKPTS/stabilityai--stable-diffusion-xl-base-1.0"
+pipe_dir = "stabilityai/stable-diffusion-xl-base-1.0"
 save_dir = "/work/CKPTS/Exports/sdxl"
 lora_dir = None
-vae_dir = "/work/CKPTS/madebyollin--sdxl-vae-fp16-fix"
+vae_dir = "madebyollin/sdxl-vae-fp16-fix"
 control_dir = {
-  "control_canny": "/work/CKPTS/diffusers--controlnet-canny-sdxl-1.0",
-  "control_depth": "/work/CKPTS/diffusers--controlnet-depth-sdxl-1.0"
+  "control_canny": "diffusers/controlnet-canny-sdxl-1.0",
+  "control_depth": "diffusers/controlnet-depth-sdxl-1.0"
 }
-vlm_dir = "/work/CKPTS/Qwen-VL-Chat-Int4"
+vlm_dir = "Qwen/Qwen-VL-Chat-Int4"
 
 lowvram = True
 opset = 17
 fp16 = True
-static_plugin_sofile = "/work/Stable_Diffusion_GPU_Deploy/plugins/build/libplugin.so"
+static_plugin_sofile = "src/utils_trt/plugins/build/libplugin.so"
 
 batch_size = [2, 2, 8]
 height = [512, 1024, 1024]
